@@ -60,11 +60,11 @@ Data flows from spectrum.json through a filtered band list (getBandsInViewport) 
 
 ## Installation
 
-``ash
+```bash
 git clone https://github.com/yourusername/em-spectrum.git
 cd em-spectrum
 npm install
-``
+```
 
 Requires Node.js 18+. All dependencies declared in package.json; no build configuration needed.
 
@@ -72,9 +72,9 @@ Requires Node.js 18+. All dependencies declared in package.json; no build config
 
 Start the development server:
 
-``ash
+```bash
 npm run dev
-``
+```
 
 Open http://localhost:3000 in your browser. Navigate to /spectrum/ to see the full visualizer.
 
@@ -91,15 +91,15 @@ Open http://localhost:3000 in your browser. Navigate to /spectrum/ to see the fu
 
 Build for static export:
 
-``ash
+```bash
 npm run build
-``
+```
 
 Output is a fully static out/ directory (no server required). Suitable for CDN or static host.
 
 ## Project Structure
 
-``
+```
 em-spectrum/
 ├── app/
 │   ├── page.tsx              — landing page (sci-fi hero, feature cards)
@@ -108,7 +108,7 @@ em-spectrum/
 │   ├── layout.tsx            — root layout, theme provider, service worker registration
 │   ├── globals.css           — CSS variables, Tailwind base styles
 │   ├── robots.ts             — SEO robots.txt
-│   ├── sitemap.ts            — SEO sitemap.xml
+│   └── sitemap.ts            — SEO sitemap.xml
 ├── components/
 │   ├── spectrum/
 │   │   ├── SpectrumRenderer.ts    — PixiJS engine (WebGL, object pool, LOD)
@@ -169,7 +169,7 @@ em-spectrum/
 ├── postcss.config.mjs
 ├── tailwind.config.ts
 └── README.md
-``
+```
 
 ## Notes
 
