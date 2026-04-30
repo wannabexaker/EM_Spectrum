@@ -341,53 +341,62 @@ export class SpectrumRenderer {
     H: number
   ): void {
     for (const feature of features) {
-      const fadeStart = feature.minZoom * 0.55
-      const fadeEnd = feature.minZoom * 1.2
-      const visibility = Math.max(0, Math.min(1, (state.zoomLevel - fadeStart) / (fadeEnd - fadeStart)))
-      if (visibility <= 0.02) continue
-      const half = feature.frequency_bandwidth / 2
-      const min = Math.max(1, feature.frequency_center - half)
-      const max = feature.frequency_center + half
-      const x1 = freqToScreenX(min, W, state.centerFrequency, state.zoomLevel)
-      const x2 = freqToScreenX(max, W, state.centerFrequency, state.zoomLevel)
-      const x = freqToScreenX(feature.frequency_center, W, state.centerFrequency, state.zoomLevel)
-      if (x < -80 || x > W + 80) continue
+      // Smoothstep fade: eased S-curve instead of linear ramp
+      const fadeStart = feature.minZoom * 0.58
+      const fadeEnd   = feature.minZoom * 1.25
+      const t = Math.max(0, Math.min(1, (state.zoomLevel - fadeStart) / (fadeEnd - fadeStart)))
+      const visibility = t * t * (3 - 2 * t)   // smoothstep
+      if (visibility < 0.015) continue
 
-      const width = Math.max(2, Math.min(Math.abs(x2 - x1), 80))
+      const x = freqToScreenX(feature.frequency_center, W, state.centerFrequency, state.zoomLevel)
+      if (x < -60 || x > W + 60) continue
+
       const color = this._hexToPixi(feature.color)
       const lane = getFeatureLane(feature, bands)
       const dotY = H * lane.y
       const marker = this.bandPool.pop() ?? new Graphics()
       marker.clear()
 
-      // Subtle band span fill + vertical guide
-      marker.rect(x - width / 2, dotY - H * 0.05, width, H * 0.10).fill({ color, alpha: 0.07 * visibility })
-      marker.moveTo(x, dotY - H * 0.07).lineTo(x, dotY + H * 0.07).stroke({ color, alpha: 0.42 * visibility, width: 0.8 })
+      // Band-span fill — only for features wider than 50 kHz (not point sources)
+      if (feature.frequency_bandwidth > 50000) {
+        const half = feature.frequency_bandwidth / 2
+        const x1 = freqToScreenX(Math.max(1, feature.frequency_center - half), W, state.centerFrequency, state.zoomLevel)
+        const x2 = freqToScreenX(feature.frequency_center + half, W, state.centerFrequency, state.zoomLevel)
+        const bw = Math.max(2, Math.min(Math.abs(x2 - x1), 64))
+        marker.rect(x - bw / 2, dotY - H * 0.038, bw, H * 0.076)
+          .fill({ color, alpha: 0.045 * visibility })
+      }
 
-      // POI dot — sits ON the EM spectrum track so it matches the click hit-test
-      marker.circle(x, dotY, 8).fill({ color, alpha: 0.15 * visibility })  // outer halo
-      marker.circle(x, dotY, 5).fill({ color, alpha: 0.90 * visibility })  // filled dot
-      marker.circle(x, dotY, 5).stroke({ color: 0xffffff, alpha: 0.28 * visibility, width: 0.8 }) // rim
+      // Short tick above the track — a subtle caret, not a full-height guide
+      marker.moveTo(x, dotY - 13).lineTo(x, dotY - 5)
+        .stroke({ color, alpha: 0.55 * visibility, width: 1.0 })
+
+      // Discrete POI dot — smaller and less intrusive than before
+      marker.circle(x, dotY, 5.5).fill({ color, alpha: 0.09 * visibility })  // soft halo
+      marker.circle(x, dotY, 3.5).fill({ color, alpha: 0.90 * visibility })  // filled dot
+      marker.circle(x, dotY, 3.5).stroke({ color: 0xffffff, alpha: 0.22 * visibility, width: 0.6 }) // subtle rim
       container.addChild(marker)
 
-      if (visibility > 0.25) {
-        const bg = this.bandPool.pop() ?? new Graphics()
+      // Label — separate alpha ramp so it fades in later than the dot
+      if (visibility > 0.42) {
+        const labelVis = Math.min(1, (visibility - 0.42) / 0.38)
+        const bg    = this.bandPool.pop() ?? new Graphics()
         const label = this.labelPool.pop() ?? new Text({ text: '' })
-        label.text = feature.shortLabel
-        label.x = x
-        label.y = dotY - 21 - ((Math.abs(Math.round(x)) % 2) * 10)
+        label.text  = feature.shortLabel
+        label.x     = x
+        label.y     = dotY - 24
         label.anchor.set(0.5)
-        label.style.fontSize = 10
-        label.style.fill = 0xffffff
-        label.alpha = visibility
+        label.style.fontSize = 9
+        label.style.fill     = 0xffffff
+        label.alpha          = labelVis * 0.88
 
-        const labelW = Math.max(34, feature.shortLabel.length * 6.7 + 16)
-        const labelH = 18
+        const labelW = Math.max(26, feature.shortLabel.length * 6.0 + 10)
+        const labelH = 14
         bg.clear()
-        bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 8)
-          .fill({ color: 0x02030a, alpha: 0.72 * visibility })
-        bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 8)
-          .stroke({ color, alpha: 0.62 * visibility, width: 0.8 })
+        bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 5)
+          .fill({ color: 0x020308, alpha: 0.70 * labelVis })
+        bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 5)
+          .stroke({ color, alpha: 0.45 * labelVis, width: 0.6 })
         container.addChild(bg, label)
       }
     }
