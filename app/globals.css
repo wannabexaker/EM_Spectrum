@@ -112,6 +112,7 @@ html, body {
   text-transform: uppercase;
   color: var(--text-accent);
   margin-bottom: 1.5rem;
+  text-shadow: 0 0 24px rgba(0, 212, 255, 0.7), 0 2px 12px rgba(0, 0, 0, 0.9);
 }
 
 .landing-title {
@@ -125,6 +126,10 @@ html, body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* text-shadow doesn't work on gradient-clipped text — use drop-shadow filter */
+  filter: drop-shadow(0 0 40px rgba(0, 212, 255, 0.45))
+          drop-shadow(0 0 12px rgba(199, 125, 255, 0.35))
+          drop-shadow(0 4px 24px rgba(0, 0, 0, 0.95));
 }
 
 .landing-subtitle {
@@ -133,6 +138,7 @@ html, body {
   margin: 0 0 3rem;
   max-width: 600px;
   line-height: 1.6;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.95), 0 0 32px rgba(0, 0, 0, 0.8);
 }
 
 /* Mini spectrum preview */
