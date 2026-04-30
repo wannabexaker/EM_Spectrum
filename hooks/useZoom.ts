@@ -209,10 +209,12 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
     switch (e.key) {
       case 'ArrowRight':
+      case 'd': case 'D':
         e.preventDefault()
         commitZoom(Math.pow(10, logCenter + PAN_STEP), baseZoom)
         break
       case 'ArrowLeft':
+      case 'a': case 'A':
         e.preventDefault()
         commitZoom(Math.pow(10, logCenter - PAN_STEP), baseZoom)
         break
