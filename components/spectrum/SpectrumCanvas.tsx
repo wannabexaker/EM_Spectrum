@@ -9,7 +9,7 @@ import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
-import { getFeatureLane } from '@/lib/spectrumLanes'
+import { getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 import { SpectrumRuler } from '@/components/ui/SpectrumRuler'
 import { FeaturePopup } from '@/components/ui/FeaturePopup'
 import { SpectrumCategoryLegend } from '@/components/ui/SpectrumCategoryLegend'
@@ -138,23 +138,27 @@ export function SpectrumCanvas() {
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
 
-      // POI dot hit-test — 10px radius, only near the EM track
+      // POI dot hit-test — must be near both the dot's x AND its lane y
+      const clickYRatio = y / rect.height
       const hit = visibleFeatures.find(f => {
         const dotX = freqToScreenX(f.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
         const dotY = rect.height * getFeatureLane(f, visibleBands).y
-        return Math.abs(x - dotX) < 14 && Math.abs(y - dotY) < 24
+        return Math.abs(x - dotX) < 14 && Math.abs(y - dotY) < 16
       })
       if (hit) {
         setPopup({ feature: hit, x, y })
         return
       }
 
-      // Regular band click
+      // Band click — check frequency (x) AND lane y so clicks on the Sound
+      // track don't accidentally select a Radio band at the same frequency
       setPopup(null)
       const clickFreq = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
-      const bandHit = visibleBands.find(
-        b => clickFreq >= b.frequency_min && clickFreq <= b.frequency_max
-      )
+      const bandHit = visibleBands.find(b => {
+        if (clickFreq < b.frequency_min || clickFreq > b.frequency_max) return false
+        const laneY = getBandLane(b).y
+        return Math.abs(clickYRatio - laneY) < 0.07   // ±7% of canvas height
+      })
       if (bandHit) selectBand(bandHit)
     },
     [visibleBands, visibleFeatures, zoomState, selectBand]
