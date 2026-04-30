@@ -8,13 +8,16 @@ import { LOG_MIN, LOG_MAX, LOG_RANGE } from '@/lib/zoom/logMapper'
 import type { ZoomState } from '@/types/spectrum'
 import type { RefObject } from 'react'
 
-const MIN_ZOOM = 1    // zoom=1 shows the full spectrum exactly
-const MAX_ZOOM = 50   // x50 practical limit
+const MIN_ZOOM = 0.5  // zoom=0.5 shows the full spectrum with wide margins
+const MAX_ZOOM = 100  // x100 practical deep zoom limit
 
 // Clamp zoom AND center so viewport edges never exceed [LOG_MIN, LOG_MAX]
 function clampViewport(center: number, zoom: number): { center: number; zoom: number } {
   const z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom))
   const halfSpan = (LOG_RANGE / z) / 2
+  if (halfSpan >= LOG_RANGE / 2) {
+    return { center: Math.pow(10, (LOG_MIN + LOG_MAX) / 2), zoom: z }
+  }
   const minLogC = LOG_MIN + halfSpan
   const maxLogC = LOG_MAX - halfSpan
   const logC = Math.max(minLogC, Math.min(maxLogC, Math.log10(Math.max(center, 1))))

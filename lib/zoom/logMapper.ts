@@ -62,5 +62,5 @@ export function clampFrequency(hz: number): number {
 }
 
 export function clampZoom(zoom: number): number {
-  return Math.min(Math.max(zoom, 0.1), 1000)
+  return Math.min(Math.max(zoom, 0.5), 100)
 }

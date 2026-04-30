@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { freqToScreenX, formatFrequency, LOG_MIN, LOG_MAX } from '@/lib/zoom/logMapper'
+import { SPECTRUM_LANES } from '@/lib/spectrumLanes'
 
 // Ruler sits over the canvas. Width/height come from CSS (100% of parent).
 // We compute tick positions as percentages so it's layout-independent.
@@ -73,15 +74,15 @@ export function SpectrumRuler() {
 
       {/* Vertical ruler — track category labels (fixed Y positions) */}
       <div className="ruler-v">
-        <div className="ruler-v-track" style={{ top: '35%' }}>
-          <span>EM Spectrum</span>
-        </div>
-        <div className="ruler-v-track" style={{ top: '62%' }}>
-          <span>Timeline</span>
-        </div>
-        <div className="ruler-v-track" style={{ top: '80%' }}>
-          <span>Audio</span>
-        </div>
+        {SPECTRUM_LANES.map(lane => (
+          <div
+            key={lane.id}
+            className="ruler-v-track"
+            style={{ top: `${lane.y * 100}%`, '--lane-color': lane.color } as CSSProperties}
+          >
+            <span>{lane.id}</span>
+          </div>
+        ))}
       </div>
     </div>
   )

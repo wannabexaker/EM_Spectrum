@@ -9,11 +9,11 @@ import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
+import { getFeatureLane } from '@/lib/spectrumLanes'
 import { SpectrumRuler } from '@/components/ui/SpectrumRuler'
 import { FeaturePopup } from '@/components/ui/FeaturePopup'
+import { SpectrumCategoryLegend } from '@/components/ui/SpectrumCategoryLegend'
 import type { ZoomState, FrequencyFeature } from '@/types/spectrum'
-
-const BAND_TRACK_Y = 0.35 // must match SpectrumRenderer constant
 
 export function SpectrumCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -139,16 +139,14 @@ export function SpectrumCanvas() {
       const y = e.clientY - rect.top
 
       // POI dot hit-test — 10px radius, only near the EM track
-      const trackY = rect.height * BAND_TRACK_Y
-      if (Math.abs(y - trackY) < 24) {
-        const hit = visibleFeatures.find(f => {
-          const dotX = freqToScreenX(f.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
-          return Math.abs(x - dotX) < 10
-        })
-        if (hit) {
-          setPopup({ feature: hit, x, y })
-          return
-        }
+      const hit = visibleFeatures.find(f => {
+        const dotX = freqToScreenX(f.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+        const dotY = rect.height * getFeatureLane(f, visibleBands).y
+        return Math.abs(x - dotX) < 14 && Math.abs(y - dotY) < 24
+      })
+      if (hit) {
+        setPopup({ feature: hit, x, y })
+        return
       }
 
       // Regular band click
@@ -216,6 +214,7 @@ export function SpectrumCanvas() {
 
       {/* Frequency + track rulers */}
       {isReady && <SpectrumRuler />}
+      {isReady && <SpectrumCategoryLegend />}
 
       {/* POI feature popup */}
       {popup && (

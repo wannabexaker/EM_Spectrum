@@ -37,7 +37,7 @@ export default async function BandPage({ params }: BandPageProps) {
 
   const center = Math.sqrt(band.frequency_min * band.frequency_max)
   const logSpan = Math.log10(band.frequency_max) - Math.log10(band.frequency_min)
-  const zoom = Math.max(0.1, Math.min(1000, LOG_RANGE / (logSpan * 2.5)))
+  const zoom = Math.max(0.5, Math.min(100, LOG_RANGE / (logSpan * 2.5)))
 
   // Redirect to spectrum page with URL state
   redirect(`/spectrum/?f=${center.toExponential(3)}&z=${zoom.toFixed(2)}`)

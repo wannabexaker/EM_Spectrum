@@ -1,10 +1,11 @@
 // Phase 17 — Deep Link URL State
 // Encode: called after pan/zoom stabilizes (debounced 300ms)
+import { clampFrequency, clampZoom } from '@/lib/zoom/logMapper'
 export function encodeViewportState(centerFrequency: number, zoomLevel: number): void {
   if (typeof window === 'undefined') return
   const params = new URLSearchParams({
-    f: centerFrequency.toExponential(3),
-    z: zoomLevel.toFixed(2),
+    f: clampFrequency(centerFrequency).toExponential(3),
+    z: clampZoom(zoomLevel).toFixed(2),
   })
   window.history.replaceState(null, '', `?${params.toString()}`)
 }
@@ -19,5 +20,5 @@ export function decodeViewportState(): { centerFrequency: number; zoomLevel: num
   const freq = parseFloat(f)
   const zoom = parseFloat(z)
   if (isNaN(freq) || isNaN(zoom) || freq <= 0 || zoom <= 0) return null
-  return { centerFrequency: freq, zoomLevel: zoom }
+  return { centerFrequency: clampFrequency(freq), zoomLevel: clampZoom(zoom) }
 }

@@ -5,11 +5,10 @@ import type { FrequencyFeature, SpectrumBand, ZoomState } from '@/types/spectrum
 import { LOG_RANGE, freqToScreenX } from '@/lib/zoom/logMapper'
 import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
+import { SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 
-const POOL_SIZE = 300
-const BAND_TRACK_Y = 0.35       // EM spectrum: top 35% of canvas height
-const SOUND_TRACK_Y = 0.80      // Sound overlay: bottom strip
-const TRACK_H_RATIO = 0.18      // track height as fraction of canvas height
+const POOL_SIZE = 600
+const TRACK_H_RATIO = 0.07      // track height as fraction of canvas height
 const VISIBLE_STRIP_COUNT = 74  // 370nm range / 5nm steps
 
 export class SpectrumRenderer {
@@ -178,11 +177,12 @@ export class SpectrumRenderer {
       const x1 = freqToScreenX(band.frequency_min, W, centerFrequency, zoomLevel)
       const x2 = freqToScreenX(band.frequency_max, W, centerFrequency, zoomLevel)
       const bw = Math.max(x2 - x1, 1)
-      const y = band.is_sound_overlay ? H * SOUND_TRACK_Y : H * BAND_TRACK_Y
+      const lane = getBandLane(band)
+      const y = H * lane.y
 
       // Phase 15 — visible spectrum: gradient strips at LOD 2+
       if (band.category === 'visible' && lodLevel >= 2 && bw > 10) {
-        this._renderVisibleSpectrum(x1, x2, y, trackH)
+        this._renderVisibleSpectrum(container, band, x1, x2, y, trackH)
         // Still draw label if wide enough
         if (bw > 60) {
           const label = this.labelPool.pop() ?? new Text({ text: '' })
@@ -197,8 +197,8 @@ export class SpectrumRenderer {
       }
 
       const color = band.is_sound_overlay
-        ? 0xFFD60A
-        : (BAND_COLORS[band.category] ?? 0xffffff)
+        ? lane.pixiColor
+        : (BAND_COLORS[band.category] ?? lane.pixiColor)
 
       const g = this.bandPool.pop() ?? new Graphics()
       g.clear()
@@ -223,12 +223,12 @@ export class SpectrumRenderer {
         label.anchor.set(0.5)
         label.style.fontSize = lodLevel >= 2 ? 11 : 9
         label.alpha = visibility
-        label.style.fill = band.is_sound_overlay ? 0xFFD60A : color
+        label.style.fill = band.is_sound_overlay ? lane.pixiColor : color
         container.addChild(label)
       }
     }
 
-    this._drawFeatureMarkers(container, features, state, W, H)
+    this._drawFeatureMarkers(container, bands, features, state, W, H)
     this._drawAxis(centerFrequency, zoomLevel, W, H)
   }
 
@@ -268,9 +268,13 @@ export class SpectrumRenderer {
       }
     }
 
-    for (let row = 1; row < 7; row++) {
-      const y = (H / 7) * row
-      g.moveTo(0, y).lineTo(W, y).stroke({ color: 0x243044, alpha: row === 4 ? 0.2 : 0.1, width: 0.5 })
+    for (const lane of SPECTRUM_LANES) {
+      const y = H * lane.y
+      const bandH = Math.max(28, H * TRACK_H_RATIO * 1.1)
+      g.rect(0, y - bandH / 2, W, bandH)
+        .fill({ color: lane.pixiColor, alpha: lane.id === 'sound' ? 0.028 : 0.022 })
+      g.moveTo(0, y).lineTo(W, y)
+        .stroke({ color: lane.pixiColor, alpha: lane.id === 'visible' ? 0.2 : 0.14, width: 0.8 })
     }
 
     const samples = 180
@@ -330,6 +334,7 @@ export class SpectrumRenderer {
 
   private _drawFeatureMarkers(
     container: Container,
+    bands: SpectrumBand[],
     features: FrequencyFeature[],
     state: ZoomState,
     W: number,
@@ -350,30 +355,40 @@ export class SpectrumRenderer {
 
       const width = Math.max(2, Math.min(Math.abs(x2 - x1), 80))
       const color = this._hexToPixi(feature.color)
+      const lane = getFeatureLane(feature, bands)
+      const dotY = H * lane.y
       const marker = this.bandPool.pop() ?? new Graphics()
       marker.clear()
 
       // Subtle band span fill + vertical guide
-      marker.rect(x - width / 2, H * 0.18, width, H * 0.64).fill({ color, alpha: 0.04 * visibility })
-      marker.moveTo(x, H * 0.18).lineTo(x, H * 0.82).stroke({ color, alpha: 0.45 * visibility, width: 0.8 })
+      marker.rect(x - width / 2, dotY - H * 0.05, width, H * 0.10).fill({ color, alpha: 0.07 * visibility })
+      marker.moveTo(x, dotY - H * 0.07).lineTo(x, dotY + H * 0.07).stroke({ color, alpha: 0.42 * visibility, width: 0.8 })
 
       // POI dot — sits ON the EM spectrum track so it matches the click hit-test
-      const dotY = H * BAND_TRACK_Y
       marker.circle(x, dotY, 8).fill({ color, alpha: 0.15 * visibility })  // outer halo
       marker.circle(x, dotY, 5).fill({ color, alpha: 0.90 * visibility })  // filled dot
       marker.circle(x, dotY, 5).stroke({ color: 0xffffff, alpha: 0.28 * visibility, width: 0.8 }) // rim
       container.addChild(marker)
 
-      if (state.zoomLevel >= feature.minZoom + 2 && Math.abs(x2 - x1) > 4) {
+      if (visibility > 0.25) {
+        const bg = this.bandPool.pop() ?? new Graphics()
         const label = this.labelPool.pop() ?? new Text({ text: '' })
         label.text = feature.shortLabel
         label.x = x
-        label.y = H * 0.16 + ((Math.abs(Math.round(x)) % 3) * 14)
+        label.y = dotY - 21 - ((Math.abs(Math.round(x)) % 2) * 10)
         label.anchor.set(0.5)
         label.style.fontSize = 10
-        label.style.fill = color
+        label.style.fill = 0xffffff
         label.alpha = visibility
-        container.addChild(label)
+
+        const labelW = Math.max(34, feature.shortLabel.length * 6.7 + 16)
+        const labelH = 18
+        bg.clear()
+        bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 8)
+          .fill({ color: 0x02030a, alpha: 0.72 * visibility })
+        bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 8)
+          .stroke({ color, alpha: 0.62 * visibility, width: 0.8 })
+        container.addChild(bg, label)
       }
     }
   }
@@ -383,31 +398,32 @@ export class SpectrumRenderer {
   }
 
   private _renderVisibleSpectrum(
+    container: Container,
+    band: SpectrumBand,
     bandX1: number,
     bandX2: number,
     y: number,
     trackH: number
   ): void {
-    if (!this.visibleSpectrumContainer) return
     const totalWidth = bandX2 - bandX1
     const stripWidth = totalWidth / VISIBLE_STRIP_COUNT
+    const g = this.bandPool.pop() ?? new Graphics()
+    g.clear()
 
     for (let i = 0; i < VISIBLE_STRIP_COUNT; i++) {
-      const strip = this.visibleStrips[i]
-      if (!strip) continue
-      const nm = 380 + i * 5
+      const t = i / Math.max(VISIBLE_STRIP_COUNT - 1, 1)
+      const nm = (band.wavelength_max + (band.wavelength_min - band.wavelength_max) * t) * 1e9
       const color = wavelengthToPixiColor(nm)
-      strip.clear()
-      strip
+      g
         .rect(bandX1 + i * stripWidth, y - trackH / 2, stripWidth + 0.5, trackH)
         .fill({ color, alpha: 0.85 })
     }
-    this.visibleSpectrumContainer.visible = true
+    container.addChild(g)
   }
 
   private _drawAxis(center: number, zoom: number, W: number, H: number): void {
     if (!this.axisGraphics) return
-    const axisY = H * 0.62
+    const axisY = H * 0.965
 
     // Baseline
     this.axisGraphics.moveTo(0, axisY).lineTo(W, axisY)
@@ -478,7 +494,7 @@ export class SpectrumRenderer {
     if (!band) return
     const x1 = freqToScreenX(band.frequency_min, this.width, state.centerFrequency, state.zoomLevel)
     const x2 = freqToScreenX(band.frequency_max, this.width, state.centerFrequency, state.zoomLevel)
-    const y = band.is_sound_overlay ? this.height * SOUND_TRACK_Y : this.height * BAND_TRACK_Y
+    const y = this.height * getBandLane(band).y
     const trackH = this.height * TRACK_H_RATIO
     this.highlightGraphics
       .roundRect(x1, y - trackH / 2, Math.max(x2 - x1, 2), trackH, 4)

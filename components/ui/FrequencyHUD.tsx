@@ -5,8 +5,9 @@ import { useSpectrumStore } from '@/store/spectrumStore'
 import { formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
 import { getLODLevel } from '@/lib/zoom/lodController'
 
-const MIN_ZOOM = 1
-const MAX_ZOOM = 50
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 100
+const ZOOM_PRESETS = [1, 2, 3, 5, 10]
 
 function formatZoom(z: number): string {
   if (z >= 10) return z.toFixed(1)
@@ -43,7 +44,7 @@ export function FrequencyHUD() {
     if (zoomAnimation.current !== null) cancelAnimationFrame(zoomAnimation.current)
     const tick = () => {
       const state = useSpectrumStore.getState()
-      const currentLogZoom = Math.log10(Math.max(state.zoomLevel, 0.1))
+      const currentLogZoom = Math.log10(Math.max(state.zoomLevel, MIN_ZOOM))
       const targetLogZoom = Math.log10(targetZoom)
       const nextLogZoom = currentLogZoom + (targetLogZoom - currentLogZoom) * 0.36
       if (Math.abs(targetLogZoom - nextLogZoom) < 0.001) {
@@ -148,7 +149,7 @@ export function FrequencyHUD() {
 
       <div className="hud-actions">
         <div className="zoom-indicator" aria-label="Zoom presets">
-          {[1, 5, 20, 50].map(level => (
+          {ZOOM_PRESETS.map(level => (
             <button
               key={level}
               className={`zoom-pill ${Math.abs(Math.log10(zoomLevel) - Math.log10(level)) < 0.22 ? 'active' : ''}`}
@@ -156,7 +157,7 @@ export function FrequencyHUD() {
               aria-label={`Set zoom to ${level}x`}
               title={`Set zoom to ${level}x`}
             >
-              {level}×
+              {level}
             </button>
           ))}
         </div>
