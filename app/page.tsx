@@ -1,8 +1,10 @@
 import Link from 'next/link'
+import ShaderBackground from '@/components/ui/shader-background'
 
 export default function LandingPage() {
   return (
-    <div className="landing-page">
+    <div className="landing-page" style={{ background: 'transparent' }}>
+      <ShaderBackground />
       <div className="starfield" aria-hidden />
       <div className="scanlines" aria-hidden />
 
