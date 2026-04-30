@@ -24,14 +24,13 @@ export function SpectrumCanvas() {
 
   const {
     zoomState,
-    handleWheel,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
-  } = useZoom()
+  } = useZoom(canvasRef)
 
   const { visibleBands } = useSpectrumData(zoomState)
   const { width, height } = useViewport(canvasRef)
@@ -190,7 +189,6 @@ export function SpectrumCanvas() {
         }`}
         aria-label="Electromagnetic spectrum visualization. Use arrow keys to pan, scroll to zoom."
         role="img"
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handlePointerUp}
