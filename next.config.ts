@@ -1,7 +1,13 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  output: 'export',
+  trailingSlash: true,
+  allowedDevOrigins: ['host.docker.internal'],
+  images: { unoptimized: true },
+  // Strict Mode double-mounts effects in dev — incompatible with WebGL
+  // (two Applications on the same canvas = context collision)
+  reactStrictMode: false,
+}
 
-export default nextConfig;
+export default nextConfig

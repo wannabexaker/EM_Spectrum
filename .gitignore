@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dev server logs (may contain local IPs / paths)
+.next-dev.*.log
+
+# AI editor tool config (local only)
+.serena/
+
+# generated knowledge graph artifacts
+graphify-out/
+
+# docs analysis cache (local only)
+docs/notes.md
+
+# local hygiene / dev notes (never commit)
+Docs/
