@@ -1,7 +1,8 @@
 // Phase 16 — Search Implementation
 import Fuse from 'fuse.js'
-import type { SpectrumBand, TechnologyOverlay } from '@/types/spectrum'
-import { formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
+import { frequencyFeatures } from '@/data/frequencyFeatures'
+import type { FrequencyFeature, SpectrumBand, TechnologyOverlay } from '@/types/spectrum'
+import { LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
 
 export interface SearchResult {
   type: 'band' | 'technology'
@@ -9,10 +10,11 @@ export interface SearchResult {
   sublabel: string
   targetFrequency: number
   targetZoom: number
-  data: SpectrumBand | TechnologyOverlay
+  data: SpectrumBand | FrequencyFeature | TechnologyOverlay
 }
 
 let fuseIndex: Fuse<SpectrumBand> | null = null
+let featureFuseIndex: Fuse<FrequencyFeature> | null = null
 
 export function buildSearchIndex(bands: SpectrumBand[]): void {
   fuseIndex = new Fuse(bands, {
@@ -23,6 +25,19 @@ export function buildSearchIndex(bands: SpectrumBand[]): void {
       { name: 'description',  weight: 0.1 },
     ],
     threshold: 0.35,
+    includeScore: true,
+  })
+}
+
+export function buildFeatureSearchIndex(): void {
+  featureFuseIndex = new Fuse(frequencyFeatures, {
+    keys: [
+      { name: 'label', weight: 0.34 },
+      { name: 'shortLabel', weight: 0.24 },
+      { name: 'family', weight: 0.22 },
+      { name: 'detail', weight: 0.20 },
+    ],
+    threshold: 0.34,
     includeScore: true,
   })
 }
@@ -47,9 +62,14 @@ export function search(query: string, bands: SpectrumBand[]): SearchResult[] {
 
   // Keyword search via Fuse.js
   if (!fuseIndex) buildSearchIndex(bands)
-  return fuseIndex!
+  if (!featureFuseIndex) buildFeatureSearchIndex()
+
+  const featureResults = featureFuseIndex!
     .search(query)
-    .slice(0, 8)
+    .map(({ item }) => _featureResult(item))
+
+  const bandResults = fuseIndex!
+    .search(query)
     .map(({ item }) => ({
       type: 'band' as const,
       label: item.label,
@@ -58,11 +78,15 @@ export function search(query: string, bands: SpectrumBand[]): SearchResult[] {
       targetZoom: 8,
       data: item,
     }))
+
+  return [...featureResults, ...bandResults].slice(0, 10)
 }
 
 // Legacy helper used by SearchBar — returns SpectrumBand[] directly
 export function searchBands(query: string, bands: SpectrumBand[]): SpectrumBand[] {
-  return search(query, bands).map(r => r.data as SpectrumBand)
+  return search(query, bands)
+    .filter(r => r.type === 'band')
+    .map(r => r.data as SpectrumBand)
 }
 
 function _parseFrequencyQuery(q: string): number | null {
@@ -105,5 +129,21 @@ function _frequencyResult(freq: number, band: SpectrumBand): SearchResult {
     targetFrequency: freq,
     targetZoom: 10,
     data: band,
+  }
+}
+
+function _featureResult(feature: FrequencyFeature): SearchResult {
+  const half = feature.frequency_bandwidth / 2
+  const min = Math.max(1, feature.frequency_center - half)
+  const max = feature.frequency_center + half
+  const logSpan = Math.max(Math.log10(max) - Math.log10(min), 0.002)
+
+  return {
+    type: 'technology',
+    label: feature.label,
+    sublabel: `${feature.family} â€” ${formatFrequency(min)}â€“${formatFrequency(max)}`,
+    targetFrequency: feature.frequency_center,
+    targetZoom: Math.max(8, Math.min(100, LOG_RANGE / (logSpan * 6))),
+    data: feature,
   }
 }

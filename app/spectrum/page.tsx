@@ -9,6 +9,7 @@ import { SidePanel } from '@/components/spectrum/SidePanel'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { LayerToggle } from '@/components/ui/LayerToggle'
 import { ModeToggle } from '@/components/ui/ModeToggle'
+import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
 import { FrequencyHUD } from '@/components/ui/FrequencyHUD'
 import { useSpectrumStore } from '@/store/spectrumStore'
@@ -35,10 +36,11 @@ export default function SpectrumPage() {
 
         <nav
           className="header-controls"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginLeft: 'auto' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginLeft: 'auto' }}
           aria-label="Visualization controls"
         >
           <LayerToggle />
+          <DetailDensityToggle />
           <ModeToggle />
           <UnitSwitcher />
         </nav>

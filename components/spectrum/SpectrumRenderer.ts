@@ -1,11 +1,12 @@
 // Phase 12 — Full Spectrum Renderer Class
 // Phase 15 — Visible Spectrum Gradient Rendering
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
-import type { FrequencyFeature, SpectrumBand, ZoomState } from '@/types/spectrum'
+import type { FrequencyFeature, SpectrumBand, SpectrumDetailDensity, SpectrumMode, ZoomState } from '@/types/spectrum'
 import { LOG_RANGE, freqToScreenX } from '@/lib/zoom/logMapper'
 import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
 import { SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
+import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
 
 const POOL_SIZE = 600
 const TRACK_H_RATIO = 0.07      // track height as fraction of canvas height
@@ -37,6 +38,8 @@ export class SpectrumRenderer {
   private _pendingBands: SpectrumBand[] = []
   private _pendingFeatures: FrequencyFeature[] = []
   private _pendingState: ZoomState = { centerFrequency: 1e9, zoomLevel: 1, lodLevel: 0 }
+  private _pendingMode: SpectrumMode = 'educational'
+  private _pendingDensity: SpectrumDetailDensity = 'details'
   private _dirty = false
 
   constructor(private canvas: HTMLCanvasElement) {}
@@ -127,10 +130,18 @@ export class SpectrumRenderer {
   }
 
   // Called from React on every visibleBands / zoomState change
-  update(bands: SpectrumBand[], state: ZoomState, features: FrequencyFeature[] = []): void {
+  update(
+    bands: SpectrumBand[],
+    state: ZoomState,
+    features: FrequencyFeature[] = [],
+    mode: SpectrumMode = 'educational',
+    density: SpectrumDetailDensity = 'details'
+  ): void {
     this._pendingBands = bands
     this._pendingFeatures = features
     this._pendingState = state
+    this._pendingMode = mode
+    this._pendingDensity = density
     this._dirty = true
   }
 
@@ -139,11 +150,17 @@ export class SpectrumRenderer {
       this.tickAnimation()
     } else if (this._dirty) {
       this._dirty = false
-      this.renderFrame(this._pendingBands, this._pendingState, this._pendingFeatures)
+      this.renderFrame(this._pendingBands, this._pendingState, this._pendingFeatures, this._pendingMode, this._pendingDensity)
     }
   }
 
-  private renderFrame(bands: SpectrumBand[], state: ZoomState, features: FrequencyFeature[] = []): void {
+  private renderFrame(
+    bands: SpectrumBand[],
+    state: ZoomState,
+    features: FrequencyFeature[] = [],
+    mode: SpectrumMode = 'educational',
+    density: SpectrumDetailDensity = 'details'
+  ): void {
     if (!this.app) return
     const { centerFrequency, zoomLevel, lodLevel } = state
     const W = this.width
@@ -183,16 +200,6 @@ export class SpectrumRenderer {
       // Phase 15 — visible spectrum: gradient strips at LOD 2+
       if (band.category === 'visible' && lodLevel >= 2 && bw > 10) {
         this._renderVisibleSpectrum(container, band, x1, x2, y, trackH)
-        // Still draw label if wide enough
-        if (bw > 60) {
-          const label = this.labelPool.pop() ?? new Text({ text: '' })
-          label.text = band.label
-          label.x = x1 + bw / 2
-          label.y = y
-          label.anchor.set(0.5)
-          label.style.fill = 0xffffff
-          container.addChild(label)
-        }
         continue
       }
 
@@ -214,21 +221,14 @@ export class SpectrumRenderer {
 
       container.addChild(g)
 
-      // Label — only if band is wide enough and in LOD range
-      if (bw > 40 && visibility > 0.45) {
-        const label = this.labelPool.pop() ?? new Text({ text: '' })
-        label.text = band.label
-        label.x = x1 + bw / 2
-        label.y = y
-        label.anchor.set(0.5)
-        label.style.fontSize = lodLevel >= 2 ? 11 : 9
-        label.alpha = visibility
-        label.style.fill = band.is_sound_overlay ? lane.pixiColor : color
-        container.addChild(label)
-      }
     }
 
-    this._drawFeatureMarkers(container, bands, features, state, W, H)
+    if (mode === 'professional') {
+      this._drawProfessionalSubBands(container, state, W, H)
+      this._drawProfessionalTechnologies(container, state, W, H, density)
+    }
+
+    this._drawFeatureMarkers(container, bands, features, state, W, H, mode, density)
     this._drawAxis(centerFrequency, zoomLevel, W, H)
   }
 
@@ -338,12 +338,21 @@ export class SpectrumRenderer {
     features: FrequencyFeature[],
     state: ZoomState,
     W: number,
-    H: number
+    H: number,
+    mode: SpectrumMode,
+    density: SpectrumDetailDensity
   ): void {
+    if (density === 'clean') return
+
+    const occupiedByLane = new Map<string, number>()
+    const minSpacing = mode === 'professional' ? 76 : 92
+    const zoomBoost = density === 'max' ? 0.52 : 1
+
     for (const feature of features) {
       // Smoothstep fade: eased S-curve instead of linear ramp
-      const fadeStart = feature.minZoom * 0.58
-      const fadeEnd   = feature.minZoom * 1.25
+      const effectiveMinZoom = Math.max(1, feature.minZoom * zoomBoost)
+      const fadeStart = effectiveMinZoom * 0.58
+      const fadeEnd   = effectiveMinZoom * 1.25
       const t = Math.max(0, Math.min(1, (state.zoomLevel - fadeStart) / (fadeEnd - fadeStart)))
       const visibility = t * t * (3 - 2 * t)   // smoothstep
       if (visibility < 0.015) continue
@@ -392,13 +401,120 @@ export class SpectrumRenderer {
 
         const labelW = Math.max(26, feature.shortLabel.length * 6.0 + 10)
         const labelH = 14
+        const laneKey = feature.category === 'technology' ? lane.id : feature.category
+        const lastRight = occupiedByLane.get(laneKey) ?? -Infinity
+        if (x - labelW / 2 - lastRight < minSpacing) {
+          this.bandPool.push(bg)
+          this.labelPool.push(label)
+          continue
+        }
+
         bg.clear()
         bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 5)
           .fill({ color: 0x020308, alpha: 0.70 * labelVis })
         bg.roundRect(x - labelW / 2, label.y - labelH / 2, labelW, labelH, 5)
           .stroke({ color, alpha: 0.45 * labelVis, width: 0.6 })
         container.addChild(bg, label)
+        occupiedByLane.set(laneKey, x + labelW / 2)
       }
+    }
+  }
+
+  private _drawProfessionalSubBands(container: Container, state: ZoomState, W: number, H: number): void {
+    const minWidthForLabel = state.zoomLevel < 5 ? 56 : 34
+    const occupiedByLane = new Map<string, number>()
+
+    for (const band of PROFESSIONAL_SUB_BANDS) {
+      const x1 = freqToScreenX(band.frequencyMin, W, state.centerFrequency, state.zoomLevel)
+      const x2 = freqToScreenX(band.frequencyMax, W, state.centerFrequency, state.zoomLevel)
+      if (x2 < -30 || x1 > W + 30) continue
+
+      const lane = SPECTRUM_LANES.find(item => item.id === band.category)
+      if (!lane) continue
+
+      const y = H * lane.y
+      const left = Math.max(0, Math.min(x1, x2))
+      const right = Math.min(W, Math.max(x1, x2))
+      const width = Math.max(right - left, 1)
+      const color = this._hexToPixi(band.color)
+
+      const g = this.bandPool.pop() ?? new Graphics()
+      g.clear()
+      g.moveTo(left, y + 15).lineTo(right, y + 15).stroke({ color, alpha: 0.32, width: 1 })
+      g.moveTo(left, y + 10).lineTo(left, y + 20).stroke({ color, alpha: 0.28, width: 0.8 })
+      g.moveTo(right, y + 10).lineTo(right, y + 20).stroke({ color, alpha: 0.28, width: 0.8 })
+      container.addChild(g)
+
+      const lastRight = occupiedByLane.get(band.category) ?? -Infinity
+      const canLabel = width > minWidthForLabel && left - lastRight > 44
+      if (!canLabel) continue
+
+      const label = this.labelPool.pop() ?? new Text({ text: '' })
+      label.text = state.zoomLevel >= 10 ? `${band.label} ${band.rangeLabel}` : band.label
+      label.x = left + width / 2
+      label.y = y + 30
+      label.anchor.set(0.5)
+      label.style.fontSize = state.zoomLevel >= 10 ? 10 : 9
+      label.style.fill = color
+      label.alpha = 0.88
+      container.addChild(label)
+      occupiedByLane.set(band.category, right)
+    }
+  }
+
+  private _drawProfessionalTechnologies(
+    container: Container,
+    state: ZoomState,
+    W: number,
+    H: number,
+    density: SpectrumDetailDensity
+  ): void {
+    if (density === 'clean') return
+
+    const occupiedByLane = new Map<string, number>()
+    const zoomBoost = density === 'max' ? 0.58 : 1
+
+    for (const tech of PROFESSIONAL_TECH_OVERLAYS) {
+      const effectiveMinZoom = Math.max(1, tech.minZoom * zoomBoost)
+      const zoomFade = Math.max(0, Math.min(1, (state.zoomLevel - effectiveMinZoom * 0.72) / (effectiveMinZoom * 0.36)))
+      const visibility = zoomFade * zoomFade * (3 - 2 * zoomFade)
+      if (visibility <= 0.02) continue
+
+      const x = freqToScreenX(tech.frequency, W, state.centerFrequency, state.zoomLevel)
+      if (x < -40 || x > W + 40) continue
+
+      const lane = SPECTRUM_LANES.find(item => item.id === tech.category)
+      if (!lane) continue
+
+      const y = H * lane.y
+      const color = this._hexToPixi(tech.color)
+      const g = this.bandPool.pop() ?? new Graphics()
+      g.clear()
+
+      if (tech.bandwidth && tech.bandwidth > 1000) {
+        const x1 = freqToScreenX(Math.max(1, tech.frequency - tech.bandwidth / 2), W, state.centerFrequency, state.zoomLevel)
+        const x2 = freqToScreenX(tech.frequency + tech.bandwidth / 2, W, state.centerFrequency, state.zoomLevel)
+        const width = Math.min(Math.max(Math.abs(x2 - x1), 2), 90)
+        g.rect(x - width / 2, y - 18, width, 36).fill({ color, alpha: 0.032 * visibility })
+      }
+
+      g.moveTo(x, y - 24).lineTo(x, y + 24).stroke({ color, alpha: 0.38 * visibility, width: 0.8 })
+      g.circle(x, y - 24, 3.2).fill({ color, alpha: 0.85 * visibility })
+      container.addChild(g)
+
+      const lastRight = occupiedByLane.get(tech.category) ?? -Infinity
+      if (visibility < 0.42 || x - lastRight < 96) continue
+
+      const label = this.labelPool.pop() ?? new Text({ text: '' })
+      label.text = tech.label
+      label.x = x
+      label.y = y - 39
+      label.anchor.set(0.5)
+      label.style.fontSize = 9
+      label.style.fill = color
+      label.alpha = Math.min(0.9, visibility)
+      container.addChild(label)
+      occupiedByLane.set(tech.category, x + Math.max(72, tech.label.length * 5.8))
     }
   }
 
@@ -479,7 +595,7 @@ export class SpectrumRenderer {
       zoomLevel: zoom,
       lodLevel: getLODLevel(zoom),
     }
-    this.renderFrame(this._pendingBands, newState, this._pendingFeatures)
+    this.renderFrame(this._pendingBands, newState, this._pendingFeatures, this._pendingMode, this._pendingDensity)
     // Notify store — keeps HUD, URL, layer data in sync during animation
     this.onAnimationFrame?.(newState)
     if (this.animProgress >= this.animDuration) {

@@ -12,6 +12,7 @@ export function UnitSwitcher() {
         className={`unit-btn ${displayUnit === 'frequency' ? 'active' : ''}`}
         onClick={() => setDisplayUnit('frequency')}
         aria-pressed={displayUnit === 'frequency'}
+        title="Show frequency in Hz"
       >
         Hz
       </button>
@@ -19,6 +20,7 @@ export function UnitSwitcher() {
         className={`unit-btn ${displayUnit === 'wavelength' ? 'active' : ''}`}
         onClick={() => setDisplayUnit('wavelength')}
         aria-pressed={displayUnit === 'wavelength'}
+        title="Show wavelength"
       >
         λ
       </button>

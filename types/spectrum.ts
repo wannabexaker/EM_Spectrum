@@ -1,5 +1,7 @@
 export type IonizationType = 'ionizing' | 'non-ionizing'
 export type LODLevel = 0 | 1 | 2 | 3
+export type SpectrumMode = 'educational' | 'professional'
+export type SpectrumDetailDensity = 'clean' | 'details' | 'max'
 
 export type SpectrumCategory =
   | 'radio'

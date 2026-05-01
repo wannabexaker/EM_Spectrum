@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { FrequencyProbe, SpectrumBand } from '@/types/spectrum'
+import type { FrequencyProbe, SpectrumBand, SpectrumDetailDensity, SpectrumMode } from '@/types/spectrum'
 
 interface SpectrumStore {
   // Zoom state
@@ -11,7 +11,8 @@ interface SpectrumStore {
   // UI state
   selectedBand: SpectrumBand | null
   isPanelOpen: boolean
-  activeMode: 'educational' | 'professional'
+  activeMode: SpectrumMode
+  detailDensity: SpectrumDetailDensity
 
   // Layer toggles
   showEM: boolean
@@ -30,7 +31,8 @@ interface SpectrumStore {
   setProbe: (probe: FrequencyProbe | null) => void
   selectBand: (band: SpectrumBand | null) => void
   toggleLayer: (layer: 'EM' | 'sound' | 'applications' | 'hazards') => void
-  setMode: (mode: 'educational' | 'professional') => void
+  setMode: (mode: SpectrumMode) => void
+  setDetailDensity: (density: SpectrumDetailDensity) => void
   setDisplayUnit: (unit: 'frequency' | 'wavelength') => void
 }
 
@@ -45,6 +47,7 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       selectedBand: null,
       isPanelOpen: false,
       activeMode: 'educational',
+      detailDensity: 'details',
       showEM: true,
       showSound: true,
       showApplications: true,
@@ -69,6 +72,7 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
         })),
 
       setMode: (mode) => set({ activeMode: mode }),
+      setDetailDensity: (detailDensity) => set({ detailDensity }),
 
       setDisplayUnit: (unit) => set({ displayUnit: unit }),
     }),

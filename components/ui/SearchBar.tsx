@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { useSpectrumData } from '@/hooks/useSpectrumData'
-import { searchBands } from '@/lib/search/searchIndex'
-import { LOG_RANGE, formatFrequency } from '@/lib/zoom/logMapper'
-import type { SpectrumBand, ZoomState } from '@/types/spectrum'
+import { search, type SearchResult } from '@/lib/search/searchIndex'
+import type { SpectrumBand } from '@/types/spectrum'
 
 interface SearchBarProps {
   onBandSelect?: (band: SpectrumBand) => void
@@ -13,15 +12,15 @@ interface SearchBarProps {
 
 export function SearchBar({ onBandSelect }: SearchBarProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SpectrumBand[]>([])
+  const [results, setResults] = useState<SearchResult[]>([])
   const [open, setOpen] = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { allBands } = useSpectrumData({ centerFrequency: 1e9, zoomLevel: 1, lodLevel: 0 })
   const selectBand = useSpectrumStore(s => s.selectBand)
   const setZoom = useSpectrumStore(s => s.setZoom)
+  const setDetailDensity = useSpectrumStore(s => s.setDetailDensity)
 
-  // Cmd/Ctrl+K to focus
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -44,22 +43,25 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
       setResults([])
       return
     }
-    setResults(searchBands(query, allBands).slice(0, 8))
+    setResults(search(query, allBands))
     setActiveIdx(0)
   }, [query, allBands])
 
   const handleSelect = useCallback(
-    (band: SpectrumBand) => {
-      const centerFreq = Math.sqrt(band.frequency_min * band.frequency_max)
-      const logSpan = Math.log10(band.frequency_max) - Math.log10(band.frequency_min)
-      const zoom = Math.max(0.5, Math.min(100, LOG_RANGE / (logSpan * 2.5)))
-      setZoom(centerFreq, zoom)
-      selectBand(band)
-      onBandSelect?.(band)
+    (result: SearchResult) => {
+      setZoom(result.targetFrequency, result.targetZoom)
+      if (result.type === 'band') {
+        const band = result.data as SpectrumBand
+        selectBand(band)
+        onBandSelect?.(band)
+      } else {
+        setDetailDensity('details')
+        selectBand(null)
+      }
       setQuery('')
       setOpen(false)
     },
-    [setZoom, selectBand, onBandSelect]
+    [setZoom, selectBand, setDetailDensity, onBandSelect]
   )
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -85,7 +87,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
           ref={inputRef}
           type="search"
           className="search-input"
-          placeholder="Search bands, frequencies… ⌘K"
+          placeholder="Search tech, bands, frequencies... Ctrl K"
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
@@ -99,20 +101,18 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
 
       {open && results.length > 0 && (
         <ul className="search-dropdown" role="listbox">
-          {results.map((band, i) => (
+          {results.map((result, i) => (
             <li
-              key={band.id}
+              key={`${result.type}-${result.data.id}`}
               role="option"
               aria-selected={i === activeIdx}
               className={`search-result ${i === activeIdx ? 'active' : ''}`}
               onMouseEnter={() => setActiveIdx(i)}
-              onMouseDown={e => { e.preventDefault(); handleSelect(band) }}
+              onMouseDown={e => { e.preventDefault(); handleSelect(result) }}
             >
-              <span className="result-label">{band.label}</span>
-              <span className="result-category">{band.category}</span>
-              <span className="result-freq">
-                {formatFrequency(band.frequency_min)}–{formatFrequency(band.frequency_max)}
-              </span>
+              <span className="result-label">{result.label}</span>
+              <span className="result-category">{result.type}</span>
+              <span className="result-freq">{result.sublabel}</span>
             </li>
           ))}
         </ul>

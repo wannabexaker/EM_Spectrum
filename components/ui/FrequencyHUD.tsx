@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
+import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
 import { formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
 import { getLODLevel } from '@/lib/zoom/lodController'
+import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
 
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 100
@@ -18,9 +20,9 @@ export function FrequencyHUD() {
   const centerFrequency = useSpectrumStore(s => s.centerFrequency)
   const zoomLevel = useSpectrumStore(s => s.zoomLevel)
   const displayUnit = useSpectrumStore(s => s.displayUnit)
-  const setDisplayUnit = useSpectrumStore(s => s.setDisplayUnit)
   const setZoom = useSpectrumStore(s => s.setZoom)
   const probe = useSpectrumStore(s => s.probe)
+  const activeMode = useSpectrumStore(s => s.activeMode)
   const zoomAnimation = useRef<number | null>(null)
 
   // Zoom input state
@@ -39,6 +41,9 @@ export function FrequencyHUD() {
   const secondary = displayUnit === 'frequency'
     ? formatWavelength(wavelength)
     : formatFrequency(readoutFrequency)
+  const professionalBand = activeMode === 'professional' ? findProfessionalBand(readoutFrequency) : null
+  const professionalLane = professionalBand ? SPECTRUM_LANE_BY_ID[professionalBand.category] : null
+  const nearbyTechnology = activeMode === 'professional' ? findNearestTechnology(readoutFrequency) : null
 
   const animateToZoom = useCallback((targetZoom: number) => {
     if (zoomAnimation.current !== null) cancelAnimationFrame(zoomAnimation.current)
@@ -145,6 +150,14 @@ export function FrequencyHUD() {
         )}
 
         <span className="hud-lod">LOD {lod}</span>
+
+        {activeMode === 'professional' && (
+          <span className="hud-pro-readout">
+            <span>{professionalLane?.label ?? 'Out of band'}</span>
+            <span>{professionalBand?.label ?? '-'}</span>
+            <span>{nearbyTechnology?.label ?? 'no nearby tech'}</span>
+          </span>
+        )}
       </div>
 
       <div className="hud-actions">
@@ -161,14 +174,6 @@ export function FrequencyHUD() {
             </button>
           ))}
         </div>
-        <button
-          className="hud-unit-toggle"
-          onClick={() => setDisplayUnit(displayUnit === 'frequency' ? 'wavelength' : 'frequency')}
-          title="Toggle Hz / wavelength"
-          aria-label="Toggle display unit"
-        >
-          {displayUnit === 'frequency' ? 'Hz to lambda' : 'lambda to Hz'}
-        </button>
         <button
           className="hud-bookmark"
           onClick={() => {

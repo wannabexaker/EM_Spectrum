@@ -7,6 +7,7 @@ import { useSpectrumData } from '@/hooks/useSpectrumData'
 import { useViewport } from '@/hooks/useViewport'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
+import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
 import { getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
@@ -37,12 +38,16 @@ export function SpectrumCanvas() {
   const selectBand = useSpectrumStore(s => s.selectBand)
   const setProbe = useSpectrumStore(s => s.setProbe)
   const selectedBand = useSpectrumStore(s => s.selectedBand)
+  const activeMode = useSpectrumStore(s => s.activeMode)
+  const detailDensity = useSpectrumStore(s => s.detailDensity)
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
+  const pointerMovedRef = useRef(false)
 
-  // POI features visible at current zoom level
-  const visibleFeatures = useMemo(
-    () => frequencyFeatures.filter(f => f.minZoom <= zoomState.zoomLevel),
-    [zoomState.zoomLevel]
-  )
+  const visibleFeatures = useMemo(() => {
+    if (detailDensity === 'clean') return []
+    const zoomBoost = detailDensity === 'max' ? 0.52 : 1
+    return frequencyFeatures.filter(feature => zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58)
+  }, [detailDensity, zoomState.zoomLevel])
 
   // Init renderer once canvas is mounted
   useEffect(() => {
@@ -68,8 +73,8 @@ export function SpectrumCanvas() {
 
   // Push band + state to renderer on every change
   useEffect(() => {
-    rendererRef.current?.update(visibleBands, zoomState, frequencyFeatures)
-  }, [visibleBands, zoomState])
+    rendererRef.current?.update(visibleBands, zoomState, frequencyFeatures, activeMode, detailDensity)
+  }, [visibleBands, zoomState, activeMode, detailDensity])
 
   // Highlight selected band
   useEffect(() => {
@@ -92,8 +97,9 @@ export function SpectrumCanvas() {
       const frequency = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
       const logSpan = LOG_RANGE / zoomState.zoomLevel
       const probeLog = Math.log10(Math.max(frequency, 1))
-      const hit = frequencyFeatures
-        .filter(feature => zoomState.zoomLevel >= feature.minZoom)
+      const zoomBoost = detailDensity === 'max' ? 0.52 : 1
+      const featureHit = detailDensity === 'clean' ? null : frequencyFeatures
+        .filter(feature => zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58)
         .find(feature => {
           const halfBandwidth = feature.frequency_bandwidth / 2
           const min = Math.max(1, feature.frequency_center - halfBandwidth)
@@ -101,6 +107,9 @@ export function SpectrumCanvas() {
           const featureWidthDecades = Math.max(Math.log10(max) - Math.log10(min), 0.002)
           return Math.abs(Math.log10(feature.frequency_center) - probeLog) < Math.max(featureWidthDecades / 2, logSpan * 0.006)
         })
+      const professionalBand = activeMode === 'professional' ? findProfessionalBand(frequency) : null
+      const professionalTech = activeMode === 'professional' && detailDensity !== 'clean' ? findNearestTechnology(frequency) : null
+      const hit = professionalTech ?? featureHit
 
       setProbe({
         frequency,
@@ -108,17 +117,33 @@ export function SpectrumCanvas() {
         x,
         y,
         label: hit?.label,
-        detail: hit?.detail,
-        family: hit?.family,
+        detail: hit?.detail ?? professionalBand?.uses,
+        family: hit ? ('family' in hit ? hit.family : 'Technology') : professionalBand?.rangeLabel,
       })
     },
-    [setProbe, zoomState]
+    [activeMode, detailDensity, setProbe, zoomState]
+  )
+
+  const handleCanvasPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect()
+      pointerDownRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+      pointerMovedRef.current = false
+      handlePointerDown(e)
+    },
+    [handlePointerDown]
   )
 
   const handleCanvasPointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const rect = e.currentTarget.getBoundingClientRect()
-      setReticle({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const start = pointerDownRef.current
+      if (start && Math.hypot(x - start.x, y - start.y) > 4) {
+        pointerMovedRef.current = true
+      }
+      setReticle({ x, y })
       updateProbe(e.clientX, e.clientY, e.currentTarget)
       handlePointerMove(e)
     },
@@ -128,25 +153,32 @@ export function SpectrumCanvas() {
   const handleCanvasPointerLeave = useCallback(() => {
     setReticle(null)
     setProbe(null)
+    pointerDownRef.current = null
+    pointerMovedRef.current = false
     handlePointerUp()
   }, [handlePointerUp, setProbe])
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!canvasRef.current) return
+      if (pointerMovedRef.current) {
+        pointerMovedRef.current = false
+        pointerDownRef.current = null
+        return
+      }
       const rect = canvasRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
 
-      // POI dot hit-test — must be near both the dot's x AND its lane y
       const clickYRatio = y / rect.height
-      const hit = visibleFeatures.find(f => {
-        const dotX = freqToScreenX(f.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
-        const dotY = rect.height * getFeatureLane(f, visibleBands).y
+      const featureHit = visibleFeatures.find(feature => {
+        const dotX = freqToScreenX(feature.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+        const dotY = rect.height * getFeatureLane(feature, visibleBands).y
         return Math.abs(x - dotX) < 14 && Math.abs(y - dotY) < 16
       })
-      if (hit) {
-        setPopup({ feature: hit, x, y })
+      if (featureHit) {
+        setPopup({ feature: featureHit, x, y })
+        pointerDownRef.current = null
         return
       }
 
@@ -154,14 +186,16 @@ export function SpectrumCanvas() {
       // track don't accidentally select a Radio band at the same frequency
       setPopup(null)
       const clickFreq = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+      const laneTolerance = activeMode === 'professional' ? 0.042 : 0.07
       const bandHit = visibleBands.find(b => {
         if (clickFreq < b.frequency_min || clickFreq > b.frequency_max) return false
         const laneY = getBandLane(b).y
-        return Math.abs(clickYRatio - laneY) < 0.07   // ±7% of canvas height
+        return Math.abs(clickYRatio - laneY) < laneTolerance
       })
       if (bandHit) selectBand(bandHit)
+      pointerDownRef.current = null
     },
-    [visibleBands, visibleFeatures, zoomState, selectBand]
+    [activeMode, visibleBands, visibleFeatures, zoomState, selectBand]
   )
 
   return (
@@ -191,7 +225,7 @@ export function SpectrumCanvas() {
         }`}
         aria-label="Electromagnetic spectrum visualization. Use arrow keys to pan, scroll to zoom."
         role="img"
-        onPointerDown={handlePointerDown}
+        onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handleCanvasPointerLeave}
@@ -234,3 +268,4 @@ export function SpectrumCanvas() {
     </div>
   )
 }
+
