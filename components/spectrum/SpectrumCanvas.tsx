@@ -40,6 +40,10 @@ export function SpectrumCanvas() {
   const selectedBand = useSpectrumStore(s => s.selectedBand)
   const activeMode = useSpectrumStore(s => s.activeMode)
   const detailDensity = useSpectrumStore(s => s.detailDensity)
+  const showEM = useSpectrumStore(s => s.showEM)
+  const showSound = useSpectrumStore(s => s.showSound)
+  const showApplications = useSpectrumStore(s => s.showApplications)
+  const showHazards = useSpectrumStore(s => s.showHazards)
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
   const pointerMovedRef = useRef(false)
 
@@ -73,8 +77,8 @@ export function SpectrumCanvas() {
 
   // Push band + state to renderer on every change
   useEffect(() => {
-    rendererRef.current?.update(visibleBands, zoomState, frequencyFeatures, activeMode, detailDensity)
-  }, [visibleBands, zoomState, activeMode, detailDensity])
+    rendererRef.current?.update(visibleBands, zoomState, frequencyFeatures, activeMode, detailDensity, showEM, showSound, showApplications, showHazards)
+  }, [visibleBands, zoomState, activeMode, detailDensity, showEM, showSound, showApplications, showHazards])
 
   // Highlight selected band
   useEffect(() => {

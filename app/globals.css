@@ -454,6 +454,45 @@ html, body {
 .layer-btn.active .layer-dot { opacity: 1; }
 .layer-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text-primary); }
 
+/* OFF state — dimmed, muted border, ✕ indicator */
+.layer-btn.inactive {
+  opacity: 0.48;
+  border-color: rgba(255,255,255,0.07);
+  color: #596476;
+}
+.layer-btn.inactive .layer-dot {
+  opacity: 0.25;
+  background: #596476;
+}
+.layer-off-mark {
+  font-size: 0.6rem;
+  color: #596476;
+  margin-left: 0.15rem;
+  line-height: 1;
+}
+.layer-btn.inactive:hover {
+  opacity: 0.72;
+  border-color: rgba(255,255,255,0.16);
+  color: var(--text-secondary);
+}
+
+/* ─── Filter Status Banner ──────────────────────────────────── */
+.filter-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.28rem 1.1rem;
+  background: rgba(255, 180, 0, 0.07);
+  border-bottom: 1px solid rgba(255, 180, 0, 0.15);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: #c8a44a;
+  letter-spacing: 0.04em;
+}
+.filter-status-icon {
+  font-size: 0.75rem;
+}
+
 /* ─── Mode & Unit Toggles ───────────────────────────────────── */
 .mode-toggle, .unit-switcher {
   display: flex;

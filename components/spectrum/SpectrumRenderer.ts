@@ -40,6 +40,10 @@ export class SpectrumRenderer {
   private _pendingState: ZoomState = { centerFrequency: 1e9, zoomLevel: 1, lodLevel: 0 }
   private _pendingMode: SpectrumMode = 'educational'
   private _pendingDensity: SpectrumDetailDensity = 'details'
+  private _pendingShowEM = true
+  private _pendingShowSound = true
+  private _pendingShowApplications = true
+  private _pendingShowHazards = true
   private _dirty = false
 
   constructor(private canvas: HTMLCanvasElement) {}
@@ -135,13 +139,21 @@ export class SpectrumRenderer {
     state: ZoomState,
     features: FrequencyFeature[] = [],
     mode: SpectrumMode = 'educational',
-    density: SpectrumDetailDensity = 'details'
+    density: SpectrumDetailDensity = 'details',
+    showEM = true,
+    showSound = true,
+    showApplications = true,
+    showHazards = true,
   ): void {
     this._pendingBands = bands
     this._pendingFeatures = features
     this._pendingState = state
     this._pendingMode = mode
     this._pendingDensity = density
+    this._pendingShowEM = showEM
+    this._pendingShowSound = showSound
+    this._pendingShowApplications = showApplications
+    this._pendingShowHazards = showHazards
     this._dirty = true
   }
 
@@ -150,7 +162,11 @@ export class SpectrumRenderer {
       this.tickAnimation()
     } else if (this._dirty) {
       this._dirty = false
-      this.renderFrame(this._pendingBands, this._pendingState, this._pendingFeatures, this._pendingMode, this._pendingDensity)
+      this.renderFrame(
+        this._pendingBands, this._pendingState, this._pendingFeatures,
+        this._pendingMode, this._pendingDensity,
+        this._pendingShowEM, this._pendingShowSound, this._pendingShowApplications, this._pendingShowHazards,
+      )
     }
   }
 
@@ -159,7 +175,11 @@ export class SpectrumRenderer {
     state: ZoomState,
     features: FrequencyFeature[] = [],
     mode: SpectrumMode = 'educational',
-    density: SpectrumDetailDensity = 'details'
+    density: SpectrumDetailDensity = 'details',
+    showEM = true,
+    showSound = true,
+    showApplications = true,
+    showHazards = true,
   ): void {
     if (!this.app) return
     const { centerFrequency, zoomLevel, lodLevel } = state
@@ -191,6 +211,9 @@ export class SpectrumRenderer {
     }
 
     for (const band of bands) {
+      if (!showEM && !band.is_sound_overlay) continue
+      if (!showSound && band.is_sound_overlay) continue
+
       const x1 = freqToScreenX(band.frequency_min, W, centerFrequency, zoomLevel)
       const x2 = freqToScreenX(band.frequency_max, W, centerFrequency, zoomLevel)
       const bw = Math.max(x2 - x1, 1)
@@ -214,21 +237,24 @@ export class SpectrumRenderer {
       this._drawBandRay(g, x1, x2, y, trackH, color, band.ionization_type === 'ionizing', band.is_sound_overlay, zoomLevel, visibility)
 
       // Phase 8 — Ionizing hazard indicator at LOD 2+ (color + strip, not color alone)
-      if (band.ionization_type === 'ionizing' && lodLevel >= 2 && bw > 6) {
+      if (showHazards && band.ionization_type === 'ionizing' && lodLevel >= 2 && bw > 6) {
         g.rect(x1, y - trackH / 2, Math.min(bw, 4), trackH)
          .fill({ color: 0xFF006E, alpha: 0.9 })
       }
 
       container.addChild(g)
-
     }
 
-    if (mode === 'professional') {
+    if (mode === 'professional' && showEM) {
       this._drawProfessionalSubBands(container, state, W, H)
+    }
+    if (mode === 'professional' && showApplications) {
       this._drawProfessionalTechnologies(container, state, W, H, density)
     }
 
-    this._drawFeatureMarkers(container, bands, features, state, W, H, mode, density)
+    if (showApplications) {
+      this._drawFeatureMarkers(container, bands, features, state, W, H, mode, density)
+    }
     this._drawAxis(centerFrequency, zoomLevel, W, H)
   }
 
@@ -595,7 +621,11 @@ export class SpectrumRenderer {
       zoomLevel: zoom,
       lodLevel: getLODLevel(zoom),
     }
-    this.renderFrame(this._pendingBands, newState, this._pendingFeatures, this._pendingMode, this._pendingDensity)
+    this.renderFrame(
+      this._pendingBands, newState, this._pendingFeatures,
+      this._pendingMode, this._pendingDensity,
+      this._pendingShowEM, this._pendingShowSound, this._pendingShowApplications, this._pendingShowHazards,
+    )
     // Notify store — keeps HUD, URL, layer data in sync during animation
     this.onAnimationFrame?.(newState)
     if (this.animProgress >= this.animDuration) {
