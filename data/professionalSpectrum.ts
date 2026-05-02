@@ -34,11 +34,11 @@ export const PROFESSIONAL_SUB_BANDS: ProfessionalBand[] = [
   { id: 'uhf', label: 'UHF', rangeLabel: '300 MHz-3 GHz', frequencyMin: 3e8, frequencyMax: 3e9, category: 'radio', color: '#00d4ff', uses: 'cellular, GPS, WiFi 2.4' },
   { id: 'shf', label: 'SHF', rangeLabel: '3-30 GHz', frequencyMin: 3e9, frequencyMax: 3e10, category: 'microwave', color: '#00ff88', uses: 'radar, satellite, WiFi 5/6' },
   { id: 'ehf', label: 'EHF', rangeLabel: '30-300 GHz', frequencyMin: 3e10, frequencyMax: 3e11, category: 'microwave', color: '#00ff88', uses: 'mmWave, radar, WiGig' },
-  { id: 'infrared', label: 'IR', rangeLabel: '300 GHz-430 THz', frequencyMin: 3e11, frequencyMax: 4.3e14, category: 'infrared', color: '#ff6b35', uses: 'thermal imaging, fiber optics' },
-  { id: 'visible', label: 'VIS', rangeLabel: '430-770 THz', frequencyMin: 4.3e14, frequencyMax: 7.7e14, category: 'visible', color: '#ffffff', uses: 'human vision, optics' },
-  { id: 'uv', label: 'UV', rangeLabel: '770 THz-30 PHz', frequencyMin: 7.7e14, frequencyMax: 3e16, category: 'ultraviolet', color: '#c77dff', uses: 'sterilization, fluorescence' },
-  { id: 'xray', label: 'X-Ray', rangeLabel: '30 PHz-30 EHz', frequencyMin: 3e16, frequencyMax: 3e19, category: 'xray', color: '#4cc9f0', uses: 'imaging, crystallography' },
-  { id: 'gamma', label: 'Gamma', rangeLabel: '>30 EHz', frequencyMin: 3e19, frequencyMax: 1e26, category: 'gamma', color: '#ff006e', uses: 'nuclear, cosmic, medical' },
+  { id: 'pro-infrared', label: 'IR', rangeLabel: '300 GHz-430 THz', frequencyMin: 3e11, frequencyMax: 4.3e14, category: 'infrared', color: '#ff6b35', uses: 'thermal imaging, fiber optics' },
+  { id: 'pro-visible', label: 'VIS', rangeLabel: '430-770 THz', frequencyMin: 4.3e14, frequencyMax: 7.7e14, category: 'visible', color: '#ffffff', uses: 'human vision, optics' },
+  { id: 'pro-uv', label: 'UV', rangeLabel: '770 THz-30 PHz', frequencyMin: 7.7e14, frequencyMax: 3e16, category: 'ultraviolet', color: '#c77dff', uses: 'sterilization, fluorescence' },
+  { id: 'pro-xray', label: 'X-Ray', rangeLabel: '30 PHz-30 EHz', frequencyMin: 3e16, frequencyMax: 3e19, category: 'xray', color: '#4cc9f0', uses: 'imaging, crystallography' },
+  { id: 'pro-gamma', label: 'Gamma', rangeLabel: '>30 EHz', frequencyMin: 3e19, frequencyMax: 1e26, category: 'gamma', color: '#ff006e', uses: 'nuclear, cosmic, medical' },
 ]
 
 export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = [
@@ -50,7 +50,7 @@ export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = [
   { id: 'ism-433', label: '433.92 ISM', frequency: 433.92e6, bandwidth: 1.74e6, category: 'radio', color: '#00f5d4', minZoom: 10, detail: '433.92 MHz ISM devices, remotes and sensors' },
   { id: 'iot-868', label: '868 EU IoT', frequency: 868e6, bandwidth: 7e6, category: 'radio', color: '#00f5d4', minZoom: 10, detail: 'EU SRD/IoT band used by LoRa and sensors' },
   { id: 'ism-915', label: '915 US ISM', frequency: 915e6, bandwidth: 26e6, category: 'radio', color: '#00f5d4', minZoom: 10, detail: 'US ISM band used by LoRa, RFID and telemetry' },
-  { id: 'gps-l1', label: 'GPS L1', frequency: 1.57542e9, bandwidth: 24e6, category: 'radio', color: '#4cc9f0', minZoom: 11, detail: 'GPS L1 C/A centered at 1.57542 GHz' },
+  { id: 'pro-gps-l1', label: 'GPS L1', frequency: 1.57542e9, bandwidth: 24e6, category: 'radio', color: '#4cc9f0', minZoom: 11, detail: 'GPS L1 C/A centered at 1.57542 GHz' },
   { id: 'wifi-24', label: '2.4 WiFi/BT', frequency: 2.4415e9, bandwidth: 83.5e6, category: 'radio', color: '#00d4ff', minZoom: 8, detail: '2.4 GHz ISM: WiFi, Bluetooth, Zigbee' },
   { id: 'wifi-5', label: '5 GHz WiFi', frequency: 5.5e9, bandwidth: 700e6, category: 'microwave', color: '#00ff88', minZoom: 8, detail: '5 GHz WiFi U-NII bands' },
   { id: 'wifi-6e', label: '6 GHz WiFi 6E', frequency: 6.5e9, bandwidth: 1.2e9, category: 'microwave', color: '#00ff88', minZoom: 8, detail: '6 GHz WiFi 6E / WiFi 7 spectrum' },

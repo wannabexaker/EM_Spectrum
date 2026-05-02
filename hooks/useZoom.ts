@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { getLODLevel } from '@/lib/zoom/lodController'
 import { encodeViewportState } from '@/lib/deeplink/urlState'
-import { LOG_MIN, LOG_MAX, LOG_RANGE } from '@/lib/zoom/logMapper'
+import { F_MIN, LOG_MIN, LOG_MAX, LOG_RANGE } from '@/lib/zoom/logMapper'
 import type { ZoomState } from '@/types/spectrum'
 import type { RefObject } from 'react'
 
@@ -20,7 +20,7 @@ function clampViewport(center: number, zoom: number): { center: number; zoom: nu
   }
   const minLogC = LOG_MIN + halfSpan
   const maxLogC = LOG_MAX - halfSpan
-  const logC = Math.max(minLogC, Math.min(maxLogC, Math.log10(Math.max(center, 1))))
+  const logC = Math.max(minLogC, Math.min(maxLogC, Math.log10(Math.max(center, F_MIN))))
   return { center: Math.pow(10, logC), zoom: z }
 }
 
@@ -58,9 +58,9 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
     } else if (animationFrame.current === null) {
       const tick = () => {
         const cur = useSpectrumStore.getState()
-        const curLogC = Math.log10(Math.max(cur.centerFrequency, 1))
+        const curLogC = Math.log10(Math.max(cur.centerFrequency, F_MIN))
         const curLogZ = Math.log10(Math.max(cur.zoomLevel, MIN_ZOOM))
-        const tgtLogC = Math.log10(Math.max(targetCenter.current, 1))
+        const tgtLogC = Math.log10(Math.max(targetCenter.current, F_MIN))
         const tgtLogZ = Math.log10(Math.max(targetZoom.current, MIN_ZOOM))
 
         const nextLogC = curLogC + (tgtLogC - curLogC) * 0.28
@@ -104,7 +104,7 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
       const rect = canvas.getBoundingClientRect()
       const cursorRatio  = (e.clientX - rect.left) / rect.width - 0.5
       const logSpan      = LOG_RANGE / baseZoom
-      const logCenter    = Math.log10(Math.max(baseCenter, 1))
+      const logCenter    = Math.log10(Math.max(baseCenter, F_MIN))
       const logCursor    = logCenter + cursorRatio * logSpan
       const newLogCenter = logCursor + (logCenter - logCursor) * (baseZoom / newZoom)
 
@@ -160,7 +160,7 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const baseCenter = animationFrame.current === null ? cur.centerFrequency : targetCenter.current
     const logSpan    = LOG_RANGE / baseZoom
     const logDelta   = -(dx / e.currentTarget.clientWidth) * logSpan
-    commitZoom(Math.pow(10, Math.log10(Math.max(baseCenter, 1)) + logDelta), baseZoom, true)
+    commitZoom(Math.pow(10, Math.log10(Math.max(baseCenter, F_MIN)) + logDelta), baseZoom, true)
   }, [commitZoom])
 
   const handlePointerUp = useCallback(() => {
@@ -205,7 +205,7 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
     const cur        = useSpectrumStore.getState()
     const baseZoom   = animationFrame.current === null ? cur.zoomLevel       : targetZoom.current
     const baseCenter = animationFrame.current === null ? cur.centerFrequency : targetCenter.current
-    const logCenter  = Math.log10(Math.max(baseCenter, 1))
+    const logCenter  = Math.log10(Math.max(baseCenter, F_MIN))
 
     switch (e.key) {
       case 'ArrowRight':

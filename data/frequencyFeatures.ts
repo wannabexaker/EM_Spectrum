@@ -1,4 +1,5 @@
 import type { FrequencyFeature } from '@/types/spectrum'
+import { universalVibrationFeatures } from './universalVibrationsAtlas'
 
 const C = {
   natural:    '#b5e48c',
@@ -1690,4 +1691,5 @@ export const frequencyFeatures: FrequencyFeature[] = [
   ...zigbeeChannels,
   ...wifi5Channels,
   ...wifi6eChannels,
+  ...universalVibrationFeatures,
 ]

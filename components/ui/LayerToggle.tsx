@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useState } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
 
 interface LayerDef {
@@ -26,13 +27,13 @@ const LAYERS: LayerDef[] = [
     key: 'applications',
     label: 'Applications',
     color: '#00ff88',
-    tooltip: 'Show/hide technology markers (WiFi, GPS, 5G, NFC…)',
+    tooltip: 'Show/hide technology markers',
   },
   {
     key: 'hazards',
     label: 'Hazards',
     color: '#ff4444',
-    tooltip: 'Show/hide ionizing radiation warning indicators',
+    tooltip: 'Show/hide ionizing radiation indicators',
   },
 ]
 
@@ -42,6 +43,8 @@ export function LayerToggle() {
   const showApplications = useSpectrumStore(s => s.showApplications)
   const showHazards = useSpectrumStore(s => s.showHazards)
   const toggleLayer = useSpectrumStore(s => s.toggleLayer)
+  const [toast, setToast] = useState<{ key: LayerDef['key']; text: string } | null>(null)
+  const toastTimer = useRef<number | null>(null)
 
   const isActive = (key: LayerDef['key']) => {
     if (key === 'EM') return showEM
@@ -49,6 +52,12 @@ export function LayerToggle() {
     if (key === 'applications') return showApplications
     if (key === 'hazards') return showHazards
     return false
+  }
+
+  const showToast = (key: LayerDef['key'], text: string) => {
+    setToast({ key, text })
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 1000)
   }
 
   return (
@@ -60,14 +69,22 @@ export function LayerToggle() {
             key={layer.key}
             className={`layer-btn ${active ? 'active' : 'inactive'}`}
             style={{ '--layer-color': layer.color } as React.CSSProperties}
-            onClick={() => toggleLayer(layer.key)}
+            onClick={() => {
+              toggleLayer(layer.key)
+              showToast(layer.key, active ? 'Hidden' : 'Shown')
+            }}
             aria-pressed={active}
             aria-label={`${active ? 'Hide' : 'Show'} ${layer.label}`}
             title={layer.tooltip}
           >
             <span className="layer-dot" />
             {layer.label}
-            {!active && <span className="layer-off-mark" aria-hidden="true">✕</span>}
+            {!active && <span className="layer-off-mark" aria-hidden="true">x</span>}
+            {toast?.key === layer.key && (
+              <span className="layer-toast" role="status">
+                {toast.text}
+              </span>
+            )}
           </button>
         )
       })}

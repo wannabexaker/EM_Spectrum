@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react'
 import { encodeViewportState } from '@/lib/deeplink/urlState'
-import { LOG_RANGE } from '@/lib/zoom/logMapper'
+import { F_MIN, LOG_RANGE } from '@/lib/zoom/logMapper'
 import { SPECTRUM_LANES, type SpectrumLane } from '@/lib/spectrumLanes'
 import { useSpectrumStore } from '@/store/spectrumStore'
 
@@ -10,8 +10,8 @@ const MAX_NAV_ZOOM = 100
 const MIN_NAV_ZOOM = 0.5
 
 function getLaneTarget(lane: SpectrumLane): { center: number; zoom: number } {
-  const minLog = Math.log10(Math.max(lane.frequencyMin, 1))
-  const maxLog = Math.log10(Math.max(lane.frequencyMax, 1))
+  const minLog = Math.log10(Math.max(lane.frequencyMin, F_MIN))
+  const maxLog = Math.log10(Math.max(lane.frequencyMax, F_MIN))
   const span = Math.max(maxLog - minLog, 0.08)
   const center = Math.pow(10, (minLog + maxLog) / 2)
   const zoom = Math.min(MAX_NAV_ZOOM, Math.max(MIN_NAV_ZOOM, LOG_RANGE / (span * 1.22)))
@@ -33,7 +33,7 @@ export function SpectrumCategoryLegend() {
     }
 
     const start = useSpectrumStore.getState()
-    const startLogCenter = Math.log10(Math.max(start.centerFrequency, 1))
+    const startLogCenter = Math.log10(Math.max(start.centerFrequency, F_MIN))
     const startLogZoom = Math.log10(Math.max(start.zoomLevel, MIN_NAV_ZOOM))
     const targetLogCenter = Math.log10(target.center)
     const targetLogZoom = Math.log10(target.zoom)

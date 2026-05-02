@@ -54,3 +54,6 @@ docs/notes.md
 
 # local hygiene / dev notes (never commit)
 Docs/
+!docs/
+docs/*
+!docs/universal-vibrations-atlas.md

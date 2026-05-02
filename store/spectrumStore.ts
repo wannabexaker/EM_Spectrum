@@ -1,7 +1,23 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { FrequencyProbe, SpectrumBand, SpectrumDetailDensity, SpectrumMode } from '@/types/spectrum'
+import type {
+  FrequencyProbe,
+  SpectrumBand,
+  SpectrumDetailDensity,
+  SpectrumDetailLayerKey,
+  SpectrumDetailLayers,
+  SpectrumMode,
+} from '@/types/spectrum'
+
+export const DEFAULT_DETAIL_LAYERS: SpectrumDetailLayers = {
+  pointsOfInterest: true,
+  technologies: true,
+  channels: true,
+  regulations: true,
+  hazards: true,
+  natural: true,
+}
 
 interface SpectrumStore {
   // Zoom state
@@ -13,6 +29,7 @@ interface SpectrumStore {
   isPanelOpen: boolean
   activeMode: SpectrumMode
   detailDensity: SpectrumDetailDensity
+  detailLayers: SpectrumDetailLayers
 
   // Layer toggles
   showEM: boolean
@@ -31,6 +48,7 @@ interface SpectrumStore {
   setProbe: (probe: FrequencyProbe | null) => void
   selectBand: (band: SpectrumBand | null) => void
   toggleLayer: (layer: 'EM' | 'sound' | 'applications' | 'hazards') => void
+  toggleDetailLayer: (layer: SpectrumDetailLayerKey) => void
   setMode: (mode: SpectrumMode) => void
   setDetailDensity: (density: SpectrumDetailDensity) => void
   setDisplayUnit: (unit: 'frequency' | 'wavelength') => void
@@ -42,12 +60,13 @@ interface SpectrumStore {
 const spectrumVanillaStore = createStore<SpectrumStore>()(
   devtools(
     (set) => ({
-      centerFrequency: 1e9,    // start at 1 GHz (UHF/microwave boundary)
+      centerFrequency: 1e6,    // midpoint of the 1e-14 Hz -> 1e26 Hz master atlas range
       zoomLevel: 1,
       selectedBand: null,
       isPanelOpen: false,
       activeMode: 'educational',
       detailDensity: 'details',
+      detailLayers: DEFAULT_DETAIL_LAYERS,
       showEM: true,
       showSound: true,
       showApplications: true,
@@ -69,6 +88,14 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
           showSound:        layer === 'sound'        ? !s.showSound        : s.showSound,
           showApplications: layer === 'applications' ? !s.showApplications : s.showApplications,
           showHazards:      layer === 'hazards'      ? !s.showHazards      : s.showHazards,
+        })),
+
+      toggleDetailLayer: (layer) =>
+        set((s) => ({
+          detailLayers: {
+            ...s.detailLayers,
+            [layer]: !s.detailLayers[layer],
+          },
         })),
 
       setMode: (mode) => set({ activeMode: mode }),

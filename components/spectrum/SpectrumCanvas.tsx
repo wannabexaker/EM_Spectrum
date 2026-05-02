@@ -9,12 +9,18 @@ import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
-import { LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
+import { F_MIN, LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
 import { getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
+import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { SpectrumRuler } from '@/components/ui/SpectrumRuler'
 import { FeaturePopup } from '@/components/ui/FeaturePopup'
 import { SpectrumCategoryLegend } from '@/components/ui/SpectrumCategoryLegend'
+import { CanvasContextBadge } from '@/components/ui/CanvasContextBadge'
+import { EducationalPopup } from '@/components/ui/EducationalPopup'
+import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
+import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
 import type { ZoomState, FrequencyFeature } from '@/types/spectrum'
+import type { EducationalExample } from '@/data/educationalExamples'
 
 export function SpectrumCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -22,6 +28,7 @@ export function SpectrumCanvas() {
   const [isReady, setIsReady] = useState(false)
   const [reticle, setReticle] = useState<{ x: number; y: number } | null>(null)
   const [popup, setPopup] = useState<{ feature: FrequencyFeature; x: number; y: number } | null>(null)
+  const [eduPopup, setEduPopup] = useState<{ example: EducationalExample; x: number; y: number } | null>(null)
 
   const {
     zoomState,
@@ -37,6 +44,7 @@ export function SpectrumCanvas() {
   const { width, height } = useViewport(canvasRef)
   const selectBand = useSpectrumStore(s => s.selectBand)
   const setProbe = useSpectrumStore(s => s.setProbe)
+  const probe = useSpectrumStore(s => s.probe)
   const selectedBand = useSpectrumStore(s => s.selectedBand)
   const activeMode = useSpectrumStore(s => s.activeMode)
   const detailDensity = useSpectrumStore(s => s.detailDensity)
@@ -44,14 +52,19 @@ export function SpectrumCanvas() {
   const showSound = useSpectrumStore(s => s.showSound)
   const showApplications = useSpectrumStore(s => s.showApplications)
   const showHazards = useSpectrumStore(s => s.showHazards)
+  const detailLayers = useSpectrumStore(s => s.detailLayers)
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
   const pointerMovedRef = useRef(false)
 
   const visibleFeatures = useMemo(() => {
-    if (detailDensity === 'clean') return []
+    if (detailDensity === 'clean' || !showApplications) return []
     const zoomBoost = detailDensity === 'max' ? 0.52 : 1
-    return frequencyFeatures.filter(feature => zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58)
-  }, [detailDensity, zoomState.zoomLevel])
+    return frequencyFeatures.filter(feature =>
+      isFeatureVisibleInMode(feature, activeMode) &&
+      isFeatureAllowedByDetailLayers(feature, detailLayers) &&
+      zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58
+    )
+  }, [activeMode, detailDensity, detailLayers, zoomState.zoomLevel, showApplications])
 
   // Init renderer once canvas is mounted
   useEffect(() => {
@@ -77,13 +90,19 @@ export function SpectrumCanvas() {
 
   // Push band + state to renderer on every change
   useEffect(() => {
-    rendererRef.current?.update(visibleBands, zoomState, frequencyFeatures, activeMode, detailDensity, showEM, showSound, showApplications, showHazards)
-  }, [visibleBands, zoomState, activeMode, detailDensity, showEM, showSound, showApplications, showHazards])
+    rendererRef.current?.update(visibleBands, zoomState, visibleFeatures, activeMode, detailDensity, showEM, showApplications, showHazards, detailLayers)
+  }, [visibleBands, visibleFeatures, zoomState, activeMode, detailDensity, showEM, showApplications, showHazards, detailLayers])
 
-  // Highlight selected band
+  // Highlight selected band — pass layer flags so highlight skips hidden bands
   useEffect(() => {
-    rendererRef.current?.highlightBand(selectedBand, zoomState)
-  }, [selectedBand, zoomState])
+    rendererRef.current?.highlightBand(selectedBand, zoomState, showEM, showSound)
+  }, [selectedBand, zoomState, showEM, showSound])
+
+  useEffect(() => {
+    if (!selectedBand) return
+    if (selectedBand.is_sound_overlay && !showSound) selectBand(null)
+    if (!selectedBand.is_sound_overlay && !showEM) selectBand(null)
+  }, [selectedBand, selectBand, showEM, showSound])
 
   // Resize — throttled by useViewport's ResizeObserver (100ms)
   useEffect(() => {
@@ -100,32 +119,44 @@ export function SpectrumCanvas() {
       const y = clientY - rect.top
       const frequency = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
       const logSpan = LOG_RANGE / zoomState.zoomLevel
-      const probeLog = Math.log10(Math.max(frequency, 1))
-      const zoomBoost = detailDensity === 'max' ? 0.52 : 1
-      const featureHit = detailDensity === 'clean' ? null : frequencyFeatures
-        .filter(feature => zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58)
+      const probeLog = Math.log10(Math.max(frequency, F_MIN))
+      const featureHit = detailDensity === 'clean' || !showApplications ? null : visibleFeatures
         .find(feature => {
           const halfBandwidth = feature.frequency_bandwidth / 2
-          const min = Math.max(1, feature.frequency_center - halfBandwidth)
-          const max = feature.frequency_center + halfBandwidth
+          const min = Math.max(F_MIN, feature.frequency_center - halfBandwidth)
+          const max = Math.max(min * 1.0001, feature.frequency_center + halfBandwidth)
           const featureWidthDecades = Math.max(Math.log10(max) - Math.log10(min), 0.002)
-          return Math.abs(Math.log10(feature.frequency_center) - probeLog) < Math.max(featureWidthDecades / 2, logSpan * 0.006)
+          return Math.abs(Math.log10(Math.max(feature.frequency_center, F_MIN)) - probeLog) < Math.max(featureWidthDecades / 2, logSpan * 0.006)
         })
       const professionalBand = activeMode === 'professional' ? findProfessionalBand(frequency) : null
-      const professionalTech = activeMode === 'professional' && detailDensity !== 'clean' ? findNearestTechnology(frequency) : null
+      const professionalTech = activeMode === 'professional' && detailDensity !== 'clean' && showApplications && detailLayers.technologies
+        ? findNearestTechnology(frequency)
+        : null
       const hit = professionalTech ?? featureHit
+
+      // Fall back to band-track hover when no POI is hit
+      const clickYRatio = y / rect.height
+      const laneTolerance = activeMode === 'professional' ? 0.042 : 0.07
+      const bandHit = hit ? null : visibleBands.find(b => {
+        if (frequency < b.frequency_min || frequency > b.frequency_max) return false
+        if (!showEM && !b.is_sound_overlay) return false
+        if (!showSound && b.is_sound_overlay) return false
+        return Math.abs(clickYRatio - getBandLane(b).y) < laneTolerance
+      })
 
       setProbe({
         frequency,
         wavelength: freqToWavelength(frequency),
         x,
         y,
-        label: hit?.label,
-        detail: hit?.detail ?? professionalBand?.uses,
-        family: hit ? ('family' in hit ? hit.family : 'Technology') : professionalBand?.rangeLabel,
+        label: hit?.label ?? bandHit?.label,
+        detail: hit?.detail ?? professionalBand?.uses ?? (bandHit?.applications.slice(0, 3).join(' · ') || undefined),
+        family: hit
+          ? ('family' in hit ? hit.family : 'Technology')
+          : professionalBand?.rangeLabel ?? bandHit?.subcategory,
       })
     },
-    [activeMode, detailDensity, setProbe, zoomState]
+    [activeMode, detailDensity, detailLayers, showApplications, showEM, showSound, visibleBands, visibleFeatures, setProbe, zoomState]
   )
 
   const handleCanvasPointerDown = useCallback(
@@ -162,6 +193,17 @@ export function SpectrumCanvas() {
     handlePointerUp()
   }, [handlePointerUp, setProbe])
 
+  const handleEduNavigate = useCallback(
+    (example: EducationalExample) => {
+      const targetZoom = Math.max(zoomState.zoomLevel, 5)
+      rendererRef.current?.animateTo(example.frequency, targetZoom, zoomState)
+      const lane = SPECTRUM_LANE_BY_ID[example.category as keyof typeof SPECTRUM_LANE_BY_ID]
+      const pinY = lane ? height * lane.y - 21 : height * 0.3
+      setEduPopup({ example, x: width / 2, y: pinY })
+    },
+    [zoomState, width, height]
+  )
+
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (!canvasRef.current) return
@@ -173,6 +215,24 @@ export function SpectrumCanvas() {
       const rect = canvasRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
+
+      // Educational pin hit test
+      if (activeMode === 'educational' && detailDensity !== 'clean' && showApplications &&
+          (detailLayers.pointsOfInterest || detailLayers.technologies)) {
+        const eduHit = EDUCATIONAL_EXAMPLES.find(ex => {
+          const lane = SPECTRUM_LANE_BY_ID[ex.category as keyof typeof SPECTRUM_LANE_BY_ID]
+          if (!lane) return false
+          const pinX = freqToScreenX(ex.frequency, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+          const pinY = rect.height * lane.y - 21
+          return Math.abs(x - pinX) < 12 && Math.abs(y - pinY) < 14
+        })
+        if (eduHit) {
+          setPopup(null)
+          setEduPopup({ example: eduHit, x, y })
+          pointerDownRef.current = null
+          return
+        }
+      }
 
       const clickYRatio = y / rect.height
       const featureHit = visibleFeatures.find(feature => {
@@ -189,6 +249,7 @@ export function SpectrumCanvas() {
       // Band click — check frequency (x) AND lane y so clicks on the Sound
       // track don't accidentally select a Radio band at the same frequency
       setPopup(null)
+      setEduPopup(null)
       const clickFreq = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
       const laneTolerance = activeMode === 'professional' ? 0.042 : 0.07
       const bandHit = visibleBands.find(b => {
@@ -199,7 +260,7 @@ export function SpectrumCanvas() {
       if (bandHit) selectBand(bandHit)
       pointerDownRef.current = null
     },
-    [activeMode, visibleBands, visibleFeatures, zoomState, selectBand]
+    [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, zoomState, selectBand]
   )
 
   return (
@@ -257,6 +318,19 @@ export function SpectrumCanvas() {
       {/* Frequency + track rulers */}
       {isReady && <SpectrumRuler />}
       {isReady && <SpectrumCategoryLegend />}
+      {isReady && <CanvasContextBadge />}
+
+      {isReady && probe?.label && (
+        <div
+          className="probe-tooltip"
+          style={{ '--px': `${probe.x}px`, '--py': `${probe.y}px` } as React.CSSProperties}
+          aria-hidden="true"
+        >
+          <strong>{probe.label}</strong>
+          <span>{probe.family}</span>
+          {probe.detail && <em>{probe.detail}</em>}
+        </div>
+      )}
 
       {/* POI feature popup */}
       {popup && (
@@ -267,6 +341,19 @@ export function SpectrumCanvas() {
           canvasW={width}
           canvasH={height}
           onClose={() => setPopup(null)}
+        />
+      )}
+
+      {/* Educational example popup */}
+      {eduPopup && (
+        <EducationalPopup
+          example={eduPopup.example}
+          x={eduPopup.x}
+          y={eduPopup.y}
+          canvasW={width}
+          canvasH={height}
+          onClose={() => setEduPopup(null)}
+          onNavigate={handleEduNavigate}
         />
       )}
     </div>

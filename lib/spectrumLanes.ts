@@ -1,3 +1,4 @@
+import { F_MIN } from '@/lib/zoom/logMapper'
 import type { SpectrumBand, SpectrumCategory, FrequencyFeature } from '@/types/spectrum'
 
 export interface SpectrumLane {
@@ -19,7 +20,7 @@ export const SPECTRUM_LANES: SpectrumLane[] = [
   { id: 'ultraviolet', y: 0.59, label: 'Ultraviolet', range: '0.75-30 PHz', frequencyMin: 7.5e14, frequencyMax: 3e16, color: '#c77dff', pixiColor: 0xc77dff },
   { id: 'xray', y: 0.71, label: 'X-ray', range: '30 PHz-300 EHz', frequencyMin: 3e16, frequencyMax: 3e20, color: '#4cc9f0', pixiColor: 0x4cc9f0 },
   { id: 'gamma', y: 0.82, label: 'Gamma', range: '>30 EHz', frequencyMin: 3e19, frequencyMax: 1e26, color: '#ff006e', pixiColor: 0xff006e },
-  { id: 'sound', y: 0.92, label: 'Audio / mechanical', range: '0.001 Hz-200 MHz', frequencyMin: 1, frequencyMax: 2e8, color: '#ffd60a', pixiColor: 0xffd60a },
+  { id: 'sound', y: 0.92, label: 'Audio / mechanical', range: 'cosmic cycles-200 MHz', frequencyMin: F_MIN, frequencyMax: 2e8, color: '#ffd60a', pixiColor: 0xffd60a },
 ]
 
 export const SPECTRUM_LANE_BY_ID = SPECTRUM_LANES.reduce(

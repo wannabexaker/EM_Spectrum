@@ -1,7 +1,41 @@
 export type IonizationType = 'ionizing' | 'non-ionizing'
-export type LODLevel = 0 | 1 | 2 | 3
+export type LODLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 export type SpectrumMode = 'educational' | 'professional'
 export type SpectrumDetailDensity = 'clean' | 'details' | 'max'
+export type ScientificConfidence =
+  | 'Scientifically Verified'
+  | 'Strong Evidence'
+  | 'Estimated / Approximate'
+  | 'Theoretical'
+  | 'Anecdotal'
+  | 'Folklore / Cultural Claim'
+  | 'Pseudoscience / Unsupported'
+  | 'Unknown / Needs Validation'
+
+export type UniversalVibrationCategory =
+  | 'physics'
+  | 'human-body'
+  | 'animals'
+  | 'nature'
+  | 'plants'
+  | 'earth-planetary'
+  | 'astronomy'
+  | 'technology'
+  | 'transport'
+  | 'civilization'
+  | 'music'
+  | 'danger-safety'
+  | 'myths-claims'
+
+export type SpectrumDetailLayerKey =
+  | 'pointsOfInterest'
+  | 'technologies'
+  | 'channels'
+  | 'regulations'
+  | 'hazards'
+  | 'natural'
+
+export type SpectrumDetailLayers = Record<SpectrumDetailLayerKey, boolean>
 
 export type SpectrumCategory =
   | 'radio'
@@ -55,6 +89,17 @@ export interface FrequencyFeature {
   detail: string
   color: string
   minZoom: number
+  aliases?: string[]
+  atlasCategory?: UniversalVibrationCategory
+  confidence?: ScientificConfidence
+  sources?: Array<{
+    label: string
+    url?: string
+    note?: string
+  }>
+  periodSeconds?: number
+  modeVisibility?: SpectrumMode | 'both'
+  listPath?: string[]
 }
 
 export interface FrequencyProbe {

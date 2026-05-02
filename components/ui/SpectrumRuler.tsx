@@ -2,7 +2,7 @@
 
 import { useMemo, type CSSProperties } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
-import { freqToScreenX, formatFrequency, LOG_MIN, LOG_MAX } from '@/lib/zoom/logMapper'
+import { F_MIN, freqToScreenX, formatFrequency, LOG_MIN, LOG_MAX } from '@/lib/zoom/logMapper'
 import { SPECTRUM_LANES } from '@/lib/spectrumLanes'
 
 // Ruler sits over the canvas. Width/height come from CSS (100% of parent).
@@ -21,7 +21,7 @@ interface Tick {
 function buildTicks(center: number, zoom: number): Tick[] {
   const ticks: Tick[] = []
   const logSpan = (LOG_MAX - LOG_MIN) / zoom
-  const logCenter = Math.log10(Math.max(center, 1))
+  const logCenter = Math.log10(Math.max(center, F_MIN))
   const logLeft  = logCenter - logSpan / 2
   const logRight = logCenter + logSpan / 2
 

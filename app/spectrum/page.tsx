@@ -12,7 +12,6 @@ import { ModeToggle } from '@/components/ui/ModeToggle'
 import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
 import { FrequencyHUD } from '@/components/ui/FrequencyHUD'
-import { FilterStatusBanner } from '@/components/ui/FilterStatusBanner'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { decodeViewportState } from '@/lib/deeplink/urlState'
 
@@ -42,12 +41,11 @@ export default function SpectrumPage() {
         >
           <LayerToggle />
           <DetailDensityToggle />
+          <div className="header-sep" aria-hidden />
           <ModeToggle />
           <UnitSwitcher />
         </nav>
       </header>
-
-      <FilterStatusBanner />
 
       {/* Canvas area */}
       <main
