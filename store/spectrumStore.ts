@@ -4,6 +4,7 @@ import { devtools } from 'zustand/middleware'
 import type {
   FrequencyProbe,
   SpectrumBand,
+  SpectrumCategory,
   SpectrumDetailDensity,
   SpectrumDetailLayerKey,
   SpectrumDetailLayers,
@@ -30,6 +31,9 @@ interface SpectrumStore {
   activeMode: SpectrumMode
   detailDensity: SpectrumDetailDensity
   detailLayers: SpectrumDetailLayers
+  selectedFeatureId: string | null
+  focusedLaneId: SpectrumCategory | null
+  selectedLaneId: SpectrumCategory | null
 
   // Layer toggles
   showEM: boolean
@@ -47,6 +51,9 @@ interface SpectrumStore {
   setZoom: (center: number, zoom: number) => void
   setProbe: (probe: FrequencyProbe | null) => void
   selectBand: (band: SpectrumBand | null) => void
+  setSelectedFeature: (id: string | null) => void
+  setFocusedLane: (lane: SpectrumCategory | null) => void
+  setSelectedLane: (lane: SpectrumCategory | null) => void
   toggleLayer: (layer: 'EM' | 'sound' | 'applications' | 'hazards') => void
   toggleDetailLayer: (layer: SpectrumDetailLayerKey) => void
   setMode: (mode: SpectrumMode) => void
@@ -67,6 +74,9 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       activeMode: 'educational',
       detailDensity: 'details',
       detailLayers: DEFAULT_DETAIL_LAYERS,
+      selectedFeatureId: null,
+      focusedLaneId: null,
+      selectedLaneId: null,
       showEM: true,
       showSound: true,
       showApplications: true,
@@ -81,6 +91,10 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
 
       selectBand: (band) =>
         set({ selectedBand: band, isPanelOpen: band !== null }),
+
+      setSelectedFeature: (selectedFeatureId) => set({ selectedFeatureId }),
+      setFocusedLane: (focusedLaneId) => set({ focusedLaneId }),
+      setSelectedLane: (selectedLaneId) => set({ selectedLaneId }),
 
       toggleLayer: (layer) =>
         set((s) => ({

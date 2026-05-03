@@ -1,11 +1,11 @@
 // Phase 12 — Full Spectrum Renderer Class
 // Phase 15 — Visible Spectrum Gradient Rendering
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
-import type { FrequencyFeature, SpectrumBand, SpectrumDetailDensity, SpectrumDetailLayers, SpectrumMode, ZoomState } from '@/types/spectrum'
+import type { FrequencyFeature, SpectrumBand, SpectrumCategory, SpectrumDetailDensity, SpectrumDetailLayers, SpectrumMode, ZoomState } from '@/types/spectrum'
 import { F_MIN, LOG_RANGE, freqToScreenX } from '@/lib/zoom/logMapper'
 import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
-import { SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
+import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
@@ -55,6 +55,34 @@ export class SpectrumRenderer {
   private _pendingShowHazards = true
   private _pendingDetailLayers: SpectrumDetailLayers = DEFAULT_DETAIL_LAYERS
   private _dirty = false
+
+  // Hovered POI state — set from React on pointer move
+  private _hoveredFeatureId: string | null = null
+  private _selectedFeatureId: string | null = null
+  private _focusedLaneId: SpectrumCategory | null = null
+  private _selectedLaneId: SpectrumCategory | null = null
+
+  setHoveredFeature(id: string | null): void {
+    if (this._hoveredFeatureId !== id) {
+      this._hoveredFeatureId = id
+      this._dirty = true
+    }
+  }
+
+  setSelectedFeature(id: string | null): void {
+    if (this._selectedFeatureId !== id) {
+      this._selectedFeatureId = id
+      this._dirty = true
+    }
+  }
+
+  setLaneFocus(focusedLaneId: SpectrumCategory | null, selectedLaneId: SpectrumCategory | null): void {
+    if (this._focusedLaneId !== focusedLaneId || this._selectedLaneId !== selectedLaneId) {
+      this._focusedLaneId = focusedLaneId
+      this._selectedLaneId = selectedLaneId
+      this._dirty = true
+    }
+  }
 
   constructor(private canvas: HTMLCanvasElement) {}
 
@@ -264,9 +292,41 @@ export class SpectrumRenderer {
     }
 
     if (showApplications) {
+      this._drawLaneFocusOverlay(container, W, H)
       this._drawFeatureMarkers(container, bands, features, state, W, H, mode, density, detailLayers)
     }
     this._drawAxis(centerFrequency, zoomLevel, W, H, mode)
+  }
+
+  private _drawLaneFocusOverlay(container: Container, W: number, H: number): void {
+    const laneId = this._focusedLaneId ?? this._selectedLaneId
+    if (!laneId) return
+
+    const lane = SPECTRUM_LANE_BY_ID[laneId]
+    if (!lane) return
+
+    const isPreview = this._focusedLaneId === laneId
+    const g = this.bandPool.pop() ?? new Graphics()
+    g.clear()
+
+    const y = H * lane.y
+    const coreH = H * (isPreview ? 0.056 : 0.064)
+    const auraH = coreH + H * 0.07
+    const color = lane.pixiColor
+
+    g.rect(0, y - auraH / 2, W, auraH).fill({ color, alpha: isPreview ? 0.045 : 0.062 })
+    g.rect(0, y - coreH / 2, W, coreH).fill({ color, alpha: isPreview ? 0.105 : 0.145 })
+    g.moveTo(0, y).lineTo(W, y).stroke({ color, alpha: isPreview ? 0.48 : 0.64, width: isPreview ? 1.4 : 2.1 })
+
+    const beaconX = W - 12
+    const beaconSize = isPreview ? 7 : 9
+    g.moveTo(beaconX, y)
+      .lineTo(beaconX - beaconSize, y - beaconSize * 0.65)
+      .lineTo(beaconX - beaconSize, y + beaconSize * 0.65)
+      .closePath()
+      .fill({ color, alpha: isPreview ? 0.72 : 0.9 })
+
+    container.addChild(g)
   }
 
   // Phase 15 — render visible spectrum as wavelength-accurate gradient strips
@@ -411,24 +471,79 @@ export class SpectrumRenderer {
       const marker = this.bandPool.pop() ?? new Graphics()
       marker.clear()
 
-      // Band-span fill for wide features (>50 kHz) — subtle frequency range context
+      const isHovered = this._hoveredFeatureId === feature.id
+      const isSelected = this._selectedFeatureId === feature.id
+      const dotScale = isHovered ? 1 + 0.9 * visibility : isSelected ? 1.52 : 1
+
+      // Range visualization for wide features (>50 kHz)
       if (feature.frequency_bandwidth > 50000) {
         const half = feature.frequency_bandwidth / 2
         const x1 = freqToScreenX(Math.max(F_MIN, feature.frequency_center - half), W, state.centerFrequency, state.zoomLevel)
         const x2 = freqToScreenX(feature.frequency_center + half, W, state.centerFrequency, state.zoomLevel)
-        const bw = Math.max(2, Math.min(Math.abs(x2 - x1), 64))
+        const bw = Math.max(2, Math.min(Math.abs(x2 - x1), W * 0.8))
+        const rangeAlpha = isHovered ? 0.14 * visibility : isSelected ? 0.11 * visibility : 0.055 * visibility
+
+        // Hover: aura glow across the full range
+        if (isHovered || isSelected) {
+          const glowH = H * 0.055
+          const baseAlpha = isHovered ? 0.018 : 0.012
+          for (let i = 3; i >= 1; i--) {
+            marker.rect(x - bw / 2 - i * 4, pinBaseY - glowH / 2 - i * 3, bw + i * 8, glowH + i * 6)
+              .fill({ color, alpha: baseAlpha * i * visibility })
+          }
+        }
+
         marker.rect(x - bw / 2, pinBaseY - H * 0.036, bw, H * 0.072)
-          .fill({ color, alpha: 0.055 * visibility })
+          .fill({ color, alpha: rangeAlpha })
+
+        // Range boundary triangles — pointing up at low end, down at high end
+        const triSize = isHovered ? 7 : isSelected ? 6 : 5
+        const triAlpha = (isHovered ? 0.88 : isSelected ? 0.78 : 0.52) * visibility
+        const triY = pinBaseY
+        // Left boundary: triangle pointing up
+        if (x1 > -20 && x1 < W + 20) {
+          marker.moveTo(x1, triY - triSize)
+                .lineTo(x1 - triSize * 0.6, triY + triSize * 0.4)
+                .lineTo(x1 + triSize * 0.6, triY + triSize * 0.4)
+                .closePath()
+                .fill({ color, alpha: triAlpha })
+        }
+        // Right boundary: triangle pointing down
+        if (x2 > -20 && x2 < W + 20) {
+          marker.moveTo(x2, triY + triSize)
+                .lineTo(x2 - triSize * 0.6, triY - triSize * 0.4)
+                .lineTo(x2 + triSize * 0.6, triY - triSize * 0.4)
+                .closePath()
+                .fill({ color, alpha: triAlpha })
+        }
       }
 
-      // Sharp vertical pin stem — precise tick, no halo
-      const pinTopY = pinBaseY - 16
-      marker.moveTo(x, pinBaseY).lineTo(x, pinTopY)
-        .stroke({ color, alpha: 0.72 * visibility, width: 1.2 })
+      // Hover: outer glow ring around pin cap
+      if (isHovered || isSelected) {
+        const maxRing = isHovered ? 3 : 2
+        const baseAlpha = isHovered ? 0.06 : 0.045
+        for (let ring = 3; ring >= 1; ring--) {
+          if (ring > maxRing) continue
+          marker.circle(x, pinBaseY - 16, (2.5 + ring * 3.5) * dotScale)
+            .fill({ color, alpha: baseAlpha * ring * visibility })
+        }
+      }
 
-      // Pin cap — small filled circle at tip, no bloom
-      marker.circle(x, pinTopY, 2.5).fill({ color, alpha: 0.95 * visibility })
-      marker.circle(x, pinTopY, 2.5).stroke({ color: 0xffffff, alpha: 0.18 * visibility, width: 0.5 })
+      // Sharp vertical pin stem
+      const pinTopY = pinBaseY - 16
+      const stemAlpha = isHovered ? 0.9 * visibility : isSelected ? 0.84 * visibility : 0.72 * visibility
+      const stemWidth = isHovered ? 1.8 : isSelected ? 1.6 : 1.2
+      marker.moveTo(x, pinBaseY).lineTo(x, pinTopY)
+        .stroke({ color, alpha: stemAlpha, width: stemWidth })
+
+      // Pin cap — enlarged on hover
+      const capR = 2.5 * dotScale
+      marker.circle(x, pinTopY, capR).fill({ color, alpha: 0.95 * visibility })
+      marker.circle(x, pinTopY, capR).stroke({ color: 0xffffff, alpha: (isHovered ? 0.55 : isSelected ? 0.48 : 0.18) * visibility, width: isHovered ? 1.0 : isSelected ? 0.9 : 0.5 })
+
+      if (isSelected) {
+        marker.circle(x, pinTopY, capR + 5.2).stroke({ color, alpha: 0.5 * visibility, width: 1.2 })
+      }
 
       container.addChild(marker)
       // Labels suppressed — all info via hover tooltip

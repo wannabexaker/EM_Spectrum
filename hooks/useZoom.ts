@@ -4,12 +4,9 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { getLODLevel } from '@/lib/zoom/lodController'
 import { encodeViewportState } from '@/lib/deeplink/urlState'
-import { F_MIN, LOG_MIN, LOG_MAX, LOG_RANGE } from '@/lib/zoom/logMapper'
+import { F_MIN, LOG_MIN, LOG_MAX, LOG_RANGE, MIN_ZOOM, MAX_ZOOM } from '@/lib/zoom/logMapper'
 import type { ZoomState } from '@/types/spectrum'
 import type { RefObject } from 'react'
-
-const MIN_ZOOM = 0.5  // zoom=0.5 shows the full spectrum with wide margins
-const MAX_ZOOM = 100  // x100 practical deep zoom limit
 
 // Clamp zoom AND center so viewport edges never exceed [LOG_MIN, LOG_MAX]
 function clampViewport(center: number, zoom: number): { center: number; zoom: number } {

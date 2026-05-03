@@ -44,6 +44,11 @@ export function SpectrumCanvas() {
   const { width, height } = useViewport(canvasRef)
   const selectBand = useSpectrumStore(s => s.selectBand)
   const setProbe = useSpectrumStore(s => s.setProbe)
+  const setSelectedFeature = useSpectrumStore(s => s.setSelectedFeature)
+  const setSelectedLane = useSpectrumStore(s => s.setSelectedLane)
+  const selectedFeatureId = useSpectrumStore(s => s.selectedFeatureId)
+  const focusedLaneId = useSpectrumStore(s => s.focusedLaneId)
+  const selectedLaneId = useSpectrumStore(s => s.selectedLaneId)
   const probe = useSpectrumStore(s => s.probe)
   const selectedBand = useSpectrumStore(s => s.selectedBand)
   const activeMode = useSpectrumStore(s => s.activeMode)
@@ -99,6 +104,14 @@ export function SpectrumCanvas() {
   }, [selectedBand, zoomState, showEM, showSound])
 
   useEffect(() => {
+    rendererRef.current?.setSelectedFeature(selectedFeatureId)
+  }, [selectedFeatureId])
+
+  useEffect(() => {
+    rendererRef.current?.setLaneFocus(focusedLaneId, selectedLaneId)
+  }, [focusedLaneId, selectedLaneId])
+
+  useEffect(() => {
     if (!selectedBand) return
     if (selectedBand.is_sound_overlay && !showSound) selectBand(null)
     if (!selectedBand.is_sound_overlay && !showEM) selectBand(null)
@@ -133,6 +146,9 @@ export function SpectrumCanvas() {
         ? findNearestTechnology(frequency)
         : null
       const hit = professionalTech ?? featureHit
+
+      // Tell renderer which feature is hovered so it can enlarge dot + show aura
+      rendererRef.current?.setHoveredFeature(featureHit?.id ?? null)
 
       // Fall back to band-track hover when no POI is hit
       const clickYRatio = y / rect.height
@@ -188,6 +204,7 @@ export function SpectrumCanvas() {
   const handleCanvasPointerLeave = useCallback(() => {
     setReticle(null)
     setProbe(null)
+    rendererRef.current?.setHoveredFeature(null)
     pointerDownRef.current = null
     pointerMovedRef.current = false
     handlePointerUp()
@@ -229,6 +246,8 @@ export function SpectrumCanvas() {
         if (eduHit) {
           setPopup(null)
           setEduPopup({ example: eduHit, x, y })
+          setSelectedFeature(null)
+          setSelectedLane(eduHit.category)
           pointerDownRef.current = null
           return
         }
@@ -242,6 +261,8 @@ export function SpectrumCanvas() {
       })
       if (featureHit) {
         setPopup({ feature: featureHit, x, y })
+        setSelectedFeature(featureHit.id)
+        setSelectedLane(getFeatureLane(featureHit, visibleBands).id)
         pointerDownRef.current = null
         return
       }
@@ -257,10 +278,16 @@ export function SpectrumCanvas() {
         const laneY = getBandLane(b).y
         return Math.abs(clickYRatio - laneY) < laneTolerance
       })
-      if (bandHit) selectBand(bandHit)
+      if (bandHit) {
+        selectBand(bandHit)
+        setSelectedFeature(null)
+        setSelectedLane(getBandLane(bandHit).id)
+      } else {
+        setSelectedFeature(null)
+      }
       pointerDownRef.current = null
     },
-    [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, zoomState, selectBand]
+    [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, zoomState, selectBand, setSelectedFeature, setSelectedLane]
   )
 
   return (

@@ -6,6 +6,8 @@ export const F_MAX = 1e26
 export const LOG_MIN = -14
 export const LOG_MAX = 26
 export const LOG_RANGE = LOG_MAX - LOG_MIN
+export const MIN_ZOOM = 0.5
+export const MAX_ZOOM = 5000
 
 export function freqToScreenX(
   frequency: number,
@@ -67,5 +69,5 @@ export function clampFrequency(hz: number): number {
 }
 
 export function clampZoom(zoom: number): number {
-  return Math.min(Math.max(zoom, 0.5), 100)
+  return Math.min(Math.max(zoom, MIN_ZOOM), MAX_ZOOM)
 }

@@ -3,12 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
-import { formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
+import { formatFrequency, formatWavelength, freqToWavelength, MIN_ZOOM, MAX_ZOOM } from '@/lib/zoom/logMapper'
 import { getLODLevel } from '@/lib/zoom/lodController'
 import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
-
-const MIN_ZOOM = 0.5
-const MAX_ZOOM = 100
 const ZOOM_PRESETS = [1, 2, 3, 5, 10]
 
 function formatZoom(z: number): string {
