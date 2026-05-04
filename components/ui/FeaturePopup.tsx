@@ -89,7 +89,9 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
 
       {feature.modulationTypes && feature.modulationTypes.length > 0 && (
         <div className="feature-popup-modulation">
-          modulation {feature.modulationTypes.join(' | ')}
+          {feature.modulationTypes.map(mod => (
+            <span key={mod} className="feature-mod-tag">{mod}</span>
+          ))}
         </div>
       )}
 
