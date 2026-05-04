@@ -28,6 +28,8 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
   const lastPointerX = useRef(0)
   const lastRightY = useRef(0)
   const lastPinchDistance = useRef<number | null>(null)
+  const lastTouchX = useRef<number | null>(null)
+  const touchMoved = useRef(false)
   const urlDebounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const animationFrame = useRef<number | null>(null)
   const targetCenter = useRef(centerFrequency)
@@ -77,7 +79,8 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
     clearTimeout(urlDebounceTimer.current)
     urlDebounceTimer.current = setTimeout(() => {
-      encodeViewportState(clamped.center, clamped.zoom)
+      const detailDensity = useSpectrumStore.getState().detailDensity
+      encodeViewportState(clamped.center, clamped.zoom, detailDensity)
     }, 300)
   }, [setZoom])
 
@@ -112,9 +115,16 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
     canvas.addEventListener('wheel', onWheel, { passive: false })
     canvas.addEventListener('contextmenu', onContextMenu)
+
+    // Native touchmove listener — ensures preventDefault works (React synthetic
+    // touch events may be passive on some browsers/React versions).
+    const onNativeTouchMove = (e: TouchEvent) => { e.preventDefault() }
+    canvas.addEventListener('touchmove', onNativeTouchMove, { passive: false })
+
     return () => {
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('contextmenu', onContextMenu)
+      canvas.removeEventListener('touchmove', onNativeTouchMove)
     }
   }, [commitZoom, canvasRef])
 
@@ -165,19 +175,27 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
     isRightDragging.current = false
   }, [])
 
-  // ─── Touch pinch-zoom ────────────────────────────────────────────────────
+  // ─── Touch pinch-zoom + single-finger pan ────────────────────────────────
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     if (e.touches.length === 2) {
+      // Two fingers → pinch zoom
+      lastTouchX.current = null
+      touchMoved.current = true
       const t0 = e.touches[0]
       const t1 = e.touches[1]
       if (!t0 || !t1) return
       lastPinchDistance.current = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
+    } else if (e.touches.length === 1) {
+      // One finger → prepare for pan (or tap)
+      lastTouchX.current = e.touches[0]!.clientX
+      touchMoved.current = false
     }
   }, [])
 
   const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault()
     if (e.touches.length === 2 && lastPinchDistance.current !== null) {
+      // Pinch zoom
       const t0 = e.touches[0]
       const t1 = e.touches[1]
       if (!t0 || !t1) return
@@ -187,16 +205,38 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
       const cur      = useSpectrumStore.getState()
       const baseZoom = animationFrame.current === null ? cur.zoomLevel : targetZoom.current
       commitZoom(cur.centerFrequency, Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, baseZoom * scale)), true)
+    } else if (e.touches.length === 1 && lastTouchX.current !== null) {
+      // Single-finger pan
+      const dx = e.touches[0]!.clientX - lastTouchX.current
+      lastTouchX.current = e.touches[0]!.clientX
+      if (Math.abs(dx) < 0.5) return
+      touchMoved.current = true
+      const cur        = useSpectrumStore.getState()
+      const baseZoom   = animationFrame.current === null ? cur.zoomLevel       : targetZoom.current
+      const baseCenter = animationFrame.current === null ? cur.centerFrequency : targetCenter.current
+      const w = canvasRef.current?.clientWidth || window.innerWidth
+      const logSpan  = LOG_RANGE / baseZoom
+      const logDelta = -(dx / w) * logSpan
+      commitZoom(Math.pow(10, Math.log10(Math.max(baseCenter, F_MIN)) + logDelta), baseZoom, true)
     }
-  }, [commitZoom])
+  }, [commitZoom, canvasRef])
 
   const handleTouchEnd = useCallback(() => {
     lastPinchDistance.current = null
+    lastTouchX.current = null
   }, [])
 
   // ─── Keyboard navigation ─────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
+    if (e.target instanceof HTMLElement && e.target.isContentEditable) return
+
+    const commitDetailDensity = (density: 'clean' | 'details' | 'max') => {
+      const s = useSpectrumStore.getState()
+      s.setDetailDensity(density)
+      encodeViewportState(s.centerFrequency, s.zoomLevel, density)
+    }
+
     const PAN_STEP  = 0.1
     const ZOOM_STEP = 1.35
     const cur        = useSpectrumStore.getState()
@@ -227,9 +267,25 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
         e.preventDefault()
         commitZoom(Math.pow(10, (LOG_MIN + LOG_MAX) / 2), 1)
         break
-      case 'Escape':
-        useSpectrumStore.getState().selectBand(null)
+      case '1':
+        e.preventDefault()
+        commitDetailDensity('clean')
         break
+      case '2':
+        e.preventDefault()
+        commitDetailDensity('details')
+        break
+      case '3':
+        e.preventDefault()
+        commitDetailDensity('max')
+        break
+      case 'Escape': {
+        const s = useSpectrumStore.getState()
+        s.selectBand(null)
+        s.setSelectedFeature(null)
+        s.setSelectedLane(null)
+        break
+      }
       default:
         return
     }
@@ -247,6 +303,7 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
   // Expose drag refs so SpectrumCanvas can show grab cursor
   return {
     zoomState,
+    commitZoom,
     isDragging,
     isRightDragging,
     handlePointerDown,
@@ -255,5 +312,6 @@ export function useZoom(canvasRef: RefObject<HTMLCanvasElement | null>) {
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
+    touchMoved,
   }
 }

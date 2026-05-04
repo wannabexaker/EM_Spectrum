@@ -12,6 +12,23 @@ export type ScientificConfidence =
   | 'Pseudoscience / Unsupported'
   | 'Unknown / Needs Validation'
 
+export type FeatureRelationType =
+  | 'harmonic'
+  | 'same-system'
+  | 'shared-allocation'
+  | 'interference-risk'
+  | 'measurement-reference'
+  | 'adjacent-service'
+  | 'cross-domain-analogy'
+
+export interface FeatureRelation {
+  targetId: string
+  type: FeatureRelationType
+  note?: string
+  weight?: number
+  confidence?: ScientificConfidence
+}
+
 export type UniversalVibrationCategory =
   | 'physics'
   | 'human-body'
@@ -98,8 +115,10 @@ export interface FrequencyFeature {
     note?: string
   }>
   periodSeconds?: number
+  modulationTypes?: string[]
   modeVisibility?: SpectrumMode | 'both'
   listPath?: string[]
+  curatedRelations?: FeatureRelation[]
 }
 
 export interface FrequencyProbe {
@@ -110,6 +129,7 @@ export interface FrequencyProbe {
   label?: string
   detail?: string
   family?: string
+  modulation?: string
 }
 
 export interface ZoomState {

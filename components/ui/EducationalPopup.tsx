@@ -19,11 +19,17 @@ export function EducationalPopup({ example, x, y, canvasW, canvasH, onClose, onN
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    let frame: number
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
-    window.addEventListener('mousedown', handler)
-    return () => window.removeEventListener('mousedown', handler)
+    frame = requestAnimationFrame(() => {
+      window.addEventListener('pointerdown', handler)
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('pointerdown', handler)
+    }
   }, [onClose])
 
   useEffect(() => {
@@ -34,8 +40,9 @@ export function EducationalPopup({ example, x, y, canvasW, canvasH, onClose, onN
 
   const POPUP_W = 320
   const POPUP_H = 260
-  const left = Math.min(x + 14, canvasW - POPUP_W - 8)
-  const top  = y + 24 + POPUP_H > canvasH ? y - POPUP_H - 14 : y + 24
+  const popupW = Math.min(POPUP_W, canvasW - 16)
+  const left = Math.max(8, Math.min(x + 14, canvasW - popupW - 8))
+  const top  = y + 24 + POPUP_H > canvasH ? Math.max(8, y - POPUP_H - 14) : y + 24
 
   const related = example.relatedIds
     .map(id => EDUCATIONAL_EXAMPLE_MAP.get(id))

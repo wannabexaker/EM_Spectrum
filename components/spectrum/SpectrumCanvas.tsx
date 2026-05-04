@@ -10,34 +10,125 @@ import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { F_MIN, LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
-import { getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
+import { getBandLane, getFeatureLane, SPECTRUM_LANES, SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
+import { getFeatureZoomBoostForDensity, isFeatureInDensityScope } from '@/lib/spectrum/detailDensityProfiles'
 import { SpectrumRuler } from '@/components/ui/SpectrumRuler'
 import { FeaturePopup } from '@/components/ui/FeaturePopup'
 import { SpectrumCategoryLegend } from '@/components/ui/SpectrumCategoryLegend'
 import { CanvasContextBadge } from '@/components/ui/CanvasContextBadge'
 import { EducationalPopup } from '@/components/ui/EducationalPopup'
 import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
-import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
-import type { ZoomState, FrequencyFeature } from '@/types/spectrum'
+import type { ZoomState, FrequencyFeature, SpectrumBand } from '@/types/spectrum'
 import type { EducationalExample } from '@/data/educationalExamples'
+
+function SpectrumCanvasFallback({
+  bands,
+  zoomState,
+  selectedBand,
+}: {
+  bands: SpectrumBand[]
+  zoomState: ZoomState
+  selectedBand: SpectrumBand | null
+}) {
+  const fallbackCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = fallbackCanvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const w = Math.max(320, Math.floor(rect.width))
+    const h = Math.max(220, Math.floor(rect.height))
+    canvas.width = Math.floor(w * dpr)
+    canvas.height = Math.floor(h * dpr)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+    ctx.clearRect(0, 0, w, h)
+    ctx.fillStyle = '#04060f'
+    ctx.fillRect(0, 0, w, h)
+
+    const trackH = Math.max(12, h * 0.065)
+    for (const band of bands) {
+      const x1 = freqToScreenX(band.frequency_min, w, zoomState.centerFrequency, zoomState.zoomLevel)
+      const x2 = freqToScreenX(band.frequency_max, w, zoomState.centerFrequency, zoomState.zoomLevel)
+      const left = Math.max(0, Math.min(x1, x2))
+      const right = Math.min(w, Math.max(x1, x2))
+      const bw = right - left
+      if (bw <= 0.8) continue
+
+      const lane = getBandLane(band)
+      const y = h * lane.y
+      const isSelected = selectedBand?.id === band.id
+
+      ctx.globalAlpha = isSelected ? 0.82 : 0.42
+      ctx.fillStyle = lane.color
+      ctx.fillRect(left, y - trackH / 2, bw, trackH)
+      ctx.globalAlpha = 1
+
+      if (isSelected) {
+        ctx.strokeStyle = '#dff7ff'
+        ctx.lineWidth = 1.3
+        ctx.strokeRect(left, y - trackH / 2, bw, trackH)
+      }
+
+      // Band label — only if wide enough
+      if (bw > 36) {
+        ctx.globalAlpha = isSelected ? 0.95 : 0.7
+        ctx.fillStyle = '#f0f0ff'
+        ctx.font = `${Math.min(11, Math.max(8, bw * 0.12))}px "Space Grotesk", sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        const label = band.label.length > bw / 6 ? band.label.slice(0, Math.floor(bw / 6)) + '…' : band.label
+        ctx.fillText(label, (left + right) / 2, y)
+        ctx.globalAlpha = 1
+      }
+    }
+
+    // center guide line
+    ctx.strokeStyle = 'rgba(116, 214, 255, 0.35)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(w * 0.5, 0)
+    ctx.lineTo(w * 0.5, h)
+    ctx.stroke()
+  }, [bands, zoomState, selectedBand])
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10">
+      <canvas
+        ref={fallbackCanvasRef}
+        className="h-full w-full"
+      />
+      <div className="absolute left-3 top-3 rounded-md border border-[#74d6ff44] bg-[#0b0d18cc] px-2 py-1 text-[11px] text-[#dff7ff]">
+        Safe Mode (2D fallback)
+      </div>
+    </div>
+  )
+}
 
 export function SpectrumCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<SpectrumRenderer | null>(null)
+  const [preferFallback, setPreferFallback] = useState(false)
   const [isReady, setIsReady] = useState(false)
+  const [initError, setInitError] = useState<string | null>(null)
   const [reticle, setReticle] = useState<{ x: number; y: number } | null>(null)
   const [popup, setPopup] = useState<{ feature: FrequencyFeature; x: number; y: number } | null>(null)
   const [eduPopup, setEduPopup] = useState<{ example: EducationalExample; x: number; y: number } | null>(null)
 
   const {
     zoomState,
+    commitZoom,
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
+    touchMoved,
   } = useZoom(canvasRef)
 
   const { visibleBands } = useSpectrumData(zoomState)
@@ -62,36 +153,81 @@ export function SpectrumCanvas() {
   const pointerMovedRef = useRef(false)
 
   const visibleFeatures = useMemo(() => {
-    if (detailDensity === 'clean' || !showApplications) return []
-    const zoomBoost = detailDensity === 'max' ? 0.52 : 1
+    if (!showApplications) return []
+    const zoomBoost = getFeatureZoomBoostForDensity(detailDensity, activeMode)
     return frequencyFeatures.filter(feature =>
       isFeatureVisibleInMode(feature, activeMode) &&
+      isFeatureInDensityScope(feature, detailDensity) &&
       isFeatureAllowedByDetailLayers(feature, detailLayers) &&
       zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58
     )
   }, [activeMode, detailDensity, detailLayers, zoomState.zoomLevel, showApplications])
 
+  // Detect coarse pointer after mount (avoids SSR/client hydration mismatch)
+  useEffect(() => {
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      setPreferFallback(true)
+    }
+  }, [])
+
   // Init renderer once canvas is mounted
   useEffect(() => {
     if (!canvasRef.current) return
+
+    // Reliability-first: mobile devices open directly in Safe Mode to avoid WebGL stalls.
+    if (preferFallback) {
+      setIsReady(false)
+      setInitError('Mobile safe mode enabled')
+      return
+    }
+
     const renderer = new SpectrumRenderer(canvasRef.current)
     rendererRef.current = renderer
+    setInitError(null)
+    const initTimer = window.setTimeout(() => {
+      if (rendererRef.current !== renderer) return
+      setInitError('Renderer initialization timed out')
+      setIsReady(false)
+    }, 2500)
 
     // Animation callback — keeps store in sync during animated navigation
     renderer.onAnimationFrame = (state: ZoomState) => {
       useSpectrumStore.getState().setZoom(state.centerFrequency, state.zoomLevel)
     }
 
-    renderer.init([]).then(() => {
-      // Guard against unmount-before-init race condition
-      if (rendererRef.current === renderer) setIsReady(true)
-    })
+    renderer.init([])
+      .then(() => {
+        // Guard against unmount-before-init race condition
+        if (rendererRef.current === renderer) {
+          clearTimeout(initTimer)
+          setIsReady(true)
+          setInitError(null)
+        }
+      })
+      .catch((error: unknown) => {
+        if (rendererRef.current !== renderer) return
+        clearTimeout(initTimer)
+        const message = error instanceof Error ? error.message : 'Unknown renderer initialization error'
+        setInitError(message)
+        setIsReady(false)
+      })
 
     return () => {
+      clearTimeout(initTimer)
       renderer.destroy()
       rendererRef.current = null
     }
-  }, [])
+  }, [preferFallback])
+
+  // Global watchdog: never stay forever in "INITIALIZING" state.
+  useEffect(() => {
+    if (isReady || initError) return
+    const watchdog = window.setTimeout(() => {
+      setInitError('Initialization watchdog fallback')
+      setIsReady(false)
+    }, 3500)
+    return () => window.clearTimeout(watchdog)
+  }, [isReady, initError])
 
   // Push band + state to renderer on every change
   useEffect(() => {
@@ -117,6 +253,136 @@ export function SpectrumCanvas() {
     if (!selectedBand.is_sound_overlay && !showEM) selectBand(null)
   }, [selectedBand, selectBand, showEM, showSound])
 
+  // ─── Keyboard arrow navigation ────────────────────────────────────────
+  // ArrowLeft / ArrowRight          → pan OR prev/next band (band selected) OR prev/next POI (feature selected)
+  // ArrowUp / ArrowDown             → jump to adjacent spectrum lane at current frequency
+  // Shift + ArrowLeft / ArrowRight  → prev/next POI feature (regardless of selection)
+  // Shift + ArrowUp / ArrowDown     → nearest POI in the lane above/below
+  useEffect(() => {
+    // Lanes sorted top→bottom by vertical position on screen
+    const lanesOrdered = [...SPECTRUM_LANES].sort((a, b) => a.y - b.y)
+
+    function getCurrentLaneIdx(centerFreq: number): number {
+      const store = useSpectrumStore.getState()
+      if (store.selectedBand) {
+        const lane = getBandLane(store.selectedBand)
+        const i = lanesOrdered.findIndex(l => l.id === lane.id)
+        if (i !== -1) return i
+      }
+      if (store.selectedFeatureId) {
+        const feat = visibleFeatures.find(f => f.id === store.selectedFeatureId)
+        if (feat) {
+          const lane = getFeatureLane(feat, visibleBands)
+          const i = lanesOrdered.findIndex(l => l.id === lane.id)
+          if (i !== -1) return i
+        }
+      }
+      // Fallback: which lane's frequency range contains the current center
+      const i = lanesOrdered.findIndex(l => centerFreq >= l.frequencyMin && centerFreq <= l.frequencyMax)
+      return i === -1 ? 0 : i
+    }
+
+    function selectFeature(feat: ReturnType<typeof visibleFeatures[0] extends infer T ? () => T : never> extends never ? (typeof visibleFeatures)[number] : (typeof visibleFeatures)[number]) {
+      const store = useSpectrumStore.getState()
+      const lane = getFeatureLane(feat, visibleBands)
+      commitZoom(feat.frequency_center, store.zoomLevel)
+      store.setSelectedFeature(feat.id)
+      store.setSelectedLane(lane.id)
+      store.selectBand(null)
+      setPopup({ feature: feat, x: width / 2, y: height * lane.y })
+      setEduPopup(null)
+    }
+
+    const handleNavKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      const isArrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)
+      if (!isArrow) return
+
+      const store = useSpectrumStore.getState()
+      const dir = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1
+      const isHoriz = e.key === 'ArrowLeft' || e.key === 'ArrowRight'
+
+      // ── Shift + Arrow: POI navigation ──────────────────────────────────
+      if (e.shiftKey) {
+        if (isHoriz) {
+          // Shift+Left/Right → prev/next visible POI by frequency
+          if (visibleFeatures.length === 0) return
+          const sorted = [...visibleFeatures].sort((a, b) => a.frequency_center - b.frequency_center)
+          const curIdx = store.selectedFeatureId
+            ? sorted.findIndex(f => f.id === store.selectedFeatureId)
+            : dir === 1 ? -1 : sorted.length
+          const nextIdx = (curIdx + dir + sorted.length) % sorted.length
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          selectFeature(sorted[nextIdx])
+        } else {
+          // Shift+Up/Down → nearest POI in the adjacent lane
+          const laneIdx = getCurrentLaneIdx(store.centerFrequency)
+          const adjIdx = laneIdx + dir
+          if (adjIdx < 0 || adjIdx >= lanesOrdered.length) return
+          const adjLane = lanesOrdered[adjIdx]
+          const candidates = visibleFeatures.filter(f => {
+            const fl = getFeatureLane(f, visibleBands)
+            return fl.id === adjLane.id
+          })
+          if (candidates.length === 0) return
+          const logCur = Math.log10(Math.max(store.centerFrequency, 1e-14))
+          const nearest = candidates.reduce((best, f) =>
+            Math.abs(Math.log10(Math.max(f.frequency_center, 1e-14)) - logCur) <
+            Math.abs(Math.log10(Math.max(best.frequency_center, 1e-14)) - logCur)
+              ? f : best
+          )
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          selectFeature(nearest)
+        }
+        return
+      }
+
+      // ── No Shift ───────────────────────────────────────────────────────
+      if (isHoriz) {
+        // ArrowLeft/Right: existing band/feature navigation (pan handled by useZoom)
+        if (store.selectedBand) {
+          const sorted = [...visibleBands].sort((a, b) => a.frequency_min - b.frequency_min)
+          const idx = sorted.findIndex(b => b.id === store.selectedBand!.id)
+          if (idx === -1) return
+          const next = sorted[(idx + dir + sorted.length) % sorted.length]
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          const logCenter = (Math.log10(Math.max(next.frequency_min, 1e-14)) + Math.log10(Math.max(next.frequency_max, 1e-14))) / 2
+          commitZoom(Math.pow(10, logCenter), store.zoomLevel)
+          store.selectBand(next)
+        } else if (store.selectedFeatureId) {
+          const sorted = [...visibleFeatures].sort((a, b) => a.frequency_center - b.frequency_center)
+          const idx = sorted.findIndex(f => f.id === store.selectedFeatureId)
+          if (idx === -1) return
+          const next = sorted[(idx + dir + sorted.length) % sorted.length]
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          selectFeature(next)
+        }
+        // if nothing selected → fall through to useZoom pan handler
+      } else {
+        // ArrowUp/Down: jump to adjacent lane at the same (clamped) frequency
+        const laneIdx = getCurrentLaneIdx(store.centerFrequency)
+        const adjIdx = laneIdx + dir
+        if (adjIdx < 0 || adjIdx >= lanesOrdered.length) return
+        const adjLane = lanesOrdered[adjIdx]
+        // Clamp current center frequency to the target lane's range
+        const targetFreq = Math.min(
+          Math.max(store.centerFrequency, adjLane.frequencyMin),
+          adjLane.frequencyMax
+        )
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        commitZoom(targetFreq, store.zoomLevel)
+      }
+    }
+
+    window.addEventListener('keydown', handleNavKey, { capture: true })
+    return () => window.removeEventListener('keydown', handleNavKey, { capture: true })
+  }, [visibleBands, visibleFeatures, commitZoom, width, height])
+
   // Resize — throttled by useViewport's ResizeObserver (100ms)
   useEffect(() => {
     if (width > 0 && height > 0) {
@@ -131,48 +397,55 @@ export function SpectrumCanvas() {
       const x = clientX - rect.left
       const y = clientY - rect.top
       const frequency = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
-      const logSpan = LOG_RANGE / zoomState.zoomLevel
-      const probeLog = Math.log10(Math.max(frequency, F_MIN))
-      const featureHit = detailDensity === 'clean' || !showApplications ? null : visibleFeatures
-        .find(feature => {
-          const halfBandwidth = feature.frequency_bandwidth / 2
-          const min = Math.max(F_MIN, feature.frequency_center - halfBandwidth)
-          const max = Math.max(min * 1.0001, feature.frequency_center + halfBandwidth)
-          const featureWidthDecades = Math.max(Math.log10(max) - Math.log10(min), 0.002)
-          return Math.abs(Math.log10(Math.max(feature.frequency_center, F_MIN)) - probeLog) < Math.max(featureWidthDecades / 2, logSpan * 0.006)
-        })
-      const professionalBand = activeMode === 'professional' ? findProfessionalBand(frequency) : null
-      const professionalTech = activeMode === 'professional' && detailDensity !== 'clean' && showApplications && detailLayers.technologies
-        ? findNearestTechnology(frequency)
+      const featureHit = detailDensity === 'clean' || !showApplications
+        ? null
+        : visibleFeatures
+          .map(feature => {
+            const lane = getFeatureLane(feature, visibleBands)
+            const dotX = freqToScreenX(feature.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+            const dotY = rect.height * lane.y - 16
+            const dx = x - dotX
+            const dy = y - dotY
+            return { feature, d2: dx * dx + dy * dy, dx: Math.abs(dx), dy: Math.abs(dy) }
+          })
+          .filter(item => item.dx <= 14 && item.dy <= 16)
+          .sort((a, b) => a.d2 - b.d2)[0]?.feature ?? null
+
+      const professionalTechCandidate =
+        activeMode === 'professional' && detailDensity !== 'clean' && showApplications && detailLayers.technologies
+          ? findNearestTechnology(frequency)
+          : null
+
+      const professionalTech = professionalTechCandidate
+        ? (() => {
+            const lane = SPECTRUM_LANE_BY_ID[professionalTechCandidate.category]
+            if (!lane) return null
+            const tx = freqToScreenX(professionalTechCandidate.frequency, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+            const ty = rect.height * lane.y - 24
+            const dx = Math.abs(x - tx)
+            const dy = Math.abs(y - ty)
+            return dx <= 14 && dy <= 16 ? professionalTechCandidate : null
+          })()
         : null
+
       const hit = professionalTech ?? featureHit
+      const hitModulation = featureHit?.modulationTypes?.slice(0, 3).join(', ')
 
       // Tell renderer which feature is hovered so it can enlarge dot + show aura
       rendererRef.current?.setHoveredFeature(featureHit?.id ?? null)
-
-      // Fall back to band-track hover when no POI is hit
-      const clickYRatio = y / rect.height
-      const laneTolerance = activeMode === 'professional' ? 0.042 : 0.07
-      const bandHit = hit ? null : visibleBands.find(b => {
-        if (frequency < b.frequency_min || frequency > b.frequency_max) return false
-        if (!showEM && !b.is_sound_overlay) return false
-        if (!showSound && b.is_sound_overlay) return false
-        return Math.abs(clickYRatio - getBandLane(b).y) < laneTolerance
-      })
 
       setProbe({
         frequency,
         wavelength: freqToWavelength(frequency),
         x,
         y,
-        label: hit?.label ?? bandHit?.label,
-        detail: hit?.detail ?? professionalBand?.uses ?? (bandHit?.applications.slice(0, 3).join(' · ') || undefined),
-        family: hit
-          ? ('family' in hit ? hit.family : 'Technology')
-          : professionalBand?.rangeLabel ?? bandHit?.subcategory,
+        label: hit?.label,
+        detail: hit?.detail,
+        family: hit ? ('family' in hit ? hit.family : 'Technology') : undefined,
+        modulation: hitModulation,
       })
     },
-    [activeMode, detailDensity, detailLayers, showApplications, showEM, showSound, visibleBands, visibleFeatures, setProbe, zoomState]
+    [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, setProbe, zoomState]
   )
 
   const handleCanvasPointerDown = useCallback(
@@ -221,8 +494,22 @@ export function SpectrumCanvas() {
     [zoomState, width, height]
   )
 
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleFeatureNavigate = useCallback(
+    (feature: FrequencyFeature) => {
+      const lane = getFeatureLane(feature, visibleBands)
+      const targetZoom = Math.max(zoomState.zoomLevel, Math.max(5, feature.minZoom * 0.85))
+      rendererRef.current?.animateTo(feature.frequency_center, targetZoom, zoomState)
+      setSelectedFeature(feature.id)
+      setSelectedLane(lane.id)
+      selectBand(null)
+      setEduPopup(null)
+      setPopup({ feature, x: width / 2, y: height * lane.y - 16 })
+    },
+    [visibleBands, zoomState, width, height, setSelectedFeature, setSelectedLane, selectBand]
+  )
+
+  const selectAtPoint = useCallback(
+    (clientX: number, clientY: number) => {
       if (!canvasRef.current) return
       if (pointerMovedRef.current) {
         pointerMovedRef.current = false
@@ -230,8 +517,8 @@ export function SpectrumCanvas() {
         return
       }
       const rect = canvasRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
+      const x = clientX - rect.left
+      const y = clientY - rect.top
 
       // Educational pin hit test
       if (activeMode === 'educational' && detailDensity !== 'clean' && showApplications &&
@@ -283,17 +570,39 @@ export function SpectrumCanvas() {
         setSelectedFeature(null)
         setSelectedLane(getBandLane(bandHit).id)
       } else {
+        // Click on empty space → full deselect
+        selectBand(null)
         setSelectedFeature(null)
+        setSelectedLane(null)
       }
       pointerDownRef.current = null
     },
     [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, zoomState, selectBand, setSelectedFeature, setSelectedLane]
   )
 
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      selectAtPoint(e.clientX, e.clientY)
+    },
+    [selectAtPoint]
+  )
+
+  const handleCanvasPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      // Mobile tap support: touch devices fire pointerup but not always click with touch-action: none.
+      // Only treat as tap if the finger didn't pan (touchMoved tracks single-finger drag in useZoom).
+      if (e.pointerType === 'touch' && !touchMoved.current) {
+        selectAtPoint(e.clientX, e.clientY)
+      }
+      handlePointerUp()
+    },
+    [handlePointerUp, selectAtPoint, touchMoved]
+  )
+
   return (
     <div className="relative w-full h-full">
       {/* Phase 18 — Loading skeleton while PixiJS initializes */}
-      {!isReady && (
+      {!isReady && !initError && !preferFallback && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#02030a]">
           <div className="flex flex-col items-center gap-4">
             <div className="w-64 h-8 rounded-full overflow-hidden relative">
@@ -309,6 +618,19 @@ export function SpectrumCanvas() {
         </div>
       )}
 
+      {(initError || preferFallback) && (
+        <>
+          <SpectrumCanvasFallback
+            bands={visibleBands}
+            zoomState={zoomState}
+            selectedBand={selectedBand}
+          />
+          <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 rounded-lg border border-[#74d6ff20] bg-[#0b0d18d0] p-2 text-xs text-[#aebcda]">
+            Lightweight mode · Drag to pan · Pinch to zoom · Tap to select
+          </div>
+        </>
+      )}
+
       {/* Canvas — cursor-none because we draw our own reticle */}
       <canvas
         ref={canvasRef}
@@ -319,7 +641,7 @@ export function SpectrumCanvas() {
         role="img"
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
-        onPointerUp={handlePointerUp}
+        onPointerUp={handleCanvasPointerUp}
         onPointerLeave={handleCanvasPointerLeave}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -355,6 +677,7 @@ export function SpectrumCanvas() {
         >
           <strong>{probe.label}</strong>
           <span>{probe.family}</span>
+          {probe.modulation && <span>mod {probe.modulation}</span>}
           {probe.detail && <em>{probe.detail}</em>}
         </div>
       )}
@@ -367,7 +690,8 @@ export function SpectrumCanvas() {
           y={popup.y}
           canvasW={width}
           canvasH={height}
-          onClose={() => setPopup(null)}
+          onNavigate={handleFeatureNavigate}
+          onClose={() => { setPopup(null); setSelectedFeature(null) }}
         />
       )}
 
@@ -379,7 +703,7 @@ export function SpectrumCanvas() {
           y={eduPopup.y}
           canvasW={width}
           canvasH={height}
-          onClose={() => setEduPopup(null)}
+          onClose={() => { setEduPopup(null); setSelectedFeature(null); setSelectedLane(null) }}
           onNavigate={handleEduNavigate}
         />
       )}

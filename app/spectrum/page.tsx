@@ -13,14 +13,23 @@ import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
 import { FrequencyHUD } from '@/components/ui/FrequencyHUD'
 import { useSpectrumStore } from '@/store/spectrumStore'
-import { decodeViewportState } from '@/lib/deeplink/urlState'
+import { decodeDetailDensityPreference, decodeViewportState } from '@/lib/deeplink/urlState'
 
 export default function SpectrumPage() {
   // Phase 17 — initialize zoom from URL on mount (getState avoids subscribing)
   useEffect(() => {
     const saved = decodeViewportState()
     if (saved) {
+      if (saved.detailDensity) {
+        useSpectrumStore.getState().setDetailDensity(saved.detailDensity)
+      }
       useSpectrumStore.getState().setZoom(saved.centerFrequency, saved.zoomLevel)
+      return
+    }
+
+    const densityPref = decodeDetailDensityPreference()
+    if (densityPref) {
+      useSpectrumStore.getState().setDetailDensity(densityPref)
     }
   }, [])
 

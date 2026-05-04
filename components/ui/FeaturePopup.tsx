@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { ATLAS_CATEGORY_LABELS } from '@/data/universalVibrationsAtlas'
 import { F_MIN, formatFrequency } from '@/lib/zoom/logMapper'
+import { findRelatedFeatures, formatRelationshipReason } from '@/lib/spectrum/featureRelationships'
 import type { FrequencyFeature } from '@/types/spectrum'
 
 interface Props {
@@ -12,17 +13,25 @@ interface Props {
   canvasW: number
   canvasH: number
   onClose: () => void
+  onNavigate?: (feature: FrequencyFeature) => void
 }
 
-export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose }: Props) {
+export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavigate }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    let frame: number
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
-    window.addEventListener('mousedown', handler)
-    return () => window.removeEventListener('mousedown', handler)
+    // Delay attaching so the opening click/tap doesn't immediately close
+    frame = requestAnimationFrame(() => {
+      window.addEventListener('pointerdown', handler)
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('pointerdown', handler)
+    }
   }, [onClose])
 
   useEffect(() => {
@@ -35,13 +44,15 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose }: Props
 
   const POPUP_W = 300
   const POPUP_H = 260
-  const left = Math.max(8, Math.min(x + 12, canvasW - POPUP_W - 8))
+  const popupW = Math.min(POPUP_W, canvasW - 16)
+  const left = Math.max(8, Math.min(x + 12, canvasW - popupW - 8))
   const top = y + 24 + POPUP_H > canvasH ? Math.max(8, y - POPUP_H - 12) : y + 24
 
   const fMin = Math.max(F_MIN, feature.frequency_center - feature.frequency_bandwidth / 2)
   const fMax = feature.frequency_center + feature.frequency_bandwidth / 2
   const periodSeconds = feature.periodSeconds ?? (feature.frequency_center > 0 ? 1 / feature.frequency_center : undefined)
   const atlasLabel = feature.atlasCategory ? ATLAS_CATEGORY_LABELS[feature.atlasCategory] : null
+  const related = findRelatedFeatures(feature, 6)
 
   return (
     <div
@@ -76,6 +87,12 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose }: Props
         </div>
       )}
 
+      {feature.modulationTypes && feature.modulationTypes.length > 0 && (
+        <div className="feature-popup-modulation">
+          modulation {feature.modulationTypes.join(' | ')}
+        </div>
+      )}
+
       <p className="feature-popup-detail">{feature.detail}</p>
 
       {feature.sources && feature.sources.length > 0 && (
@@ -90,6 +107,26 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose }: Props
               <em key={source.label}>{source.label}</em>
             )
           ))}
+        </div>
+      )}
+
+      {onNavigate && related.length > 0 && (
+        <div className="feature-popup-related">
+          <span className="feature-popup-related-label">Related</span>
+          <div className="feature-popup-chips">
+            {related.map(rel => (
+              <button
+                key={rel.feature.id}
+                className={`feature-chip ${rel.curated ? 'is-curated' : ''}`}
+                onClick={() => onNavigate(rel.feature)}
+                title={`${formatRelationshipReason(rel.reason)}${rel.note ? ` · ${rel.note}` : ''}`}
+              >
+                {rel.curated && <span className="feature-chip-mark" aria-hidden>●</span>}
+                {rel.feature.shortLabel}
+                <span className="feature-chip-freq">{formatFrequency(rel.feature.frequency_center)}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

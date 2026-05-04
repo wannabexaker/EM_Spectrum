@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { getDetailDensityLayerPreset } from '@/lib/spectrum/detailDensityProfiles'
 import type {
   FrequencyProbe,
   SpectrumBand,
@@ -112,8 +113,16 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
           },
         })),
 
-      setMode: (mode) => set({ activeMode: mode }),
-      setDetailDensity: (detailDensity) => set({ detailDensity }),
+      setMode: (mode) =>
+        set((s) => ({
+          activeMode: mode,
+          detailLayers: getDetailDensityLayerPreset(s.detailDensity, mode),
+        })),
+      setDetailDensity: (detailDensity) =>
+        set((s) => ({
+          detailDensity,
+          detailLayers: getDetailDensityLayerPreset(detailDensity, s.activeMode),
+        })),
 
       setDisplayUnit: (unit) => set({ displayUnit: unit }),
     }),

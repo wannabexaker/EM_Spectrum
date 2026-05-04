@@ -120,7 +120,7 @@ const wifi6eChannels = wifi6eChannelNums.map(ch => {
 })
 
 // ─── Main feature list ────────────────────────────────────────────────────────
-export const frequencyFeatures: FrequencyFeature[] = [
+const baseFrequencyFeatures: FrequencyFeature[] = [
 
   // ── NATURAL / PHYSICS ──────────────────────────────────────────────────────
   {
@@ -134,6 +134,12 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '7.83 Hz: fundamental Schumann resonance of the Earth-ionosphere cavity, excited by global lightning. EM standing wave in spherical cavity; wavelength equals Earth circumference.',
     color: C.natural,
     minZoom: 2,
+    curatedRelations: [
+      { targetId: 'schumann-2', type: 'harmonic', note: '2nd Schumann harmonic', weight: 1 },
+      { targetId: 'schumann-3', type: 'harmonic', note: '3rd Schumann harmonic', weight: 0.95 },
+      { targetId: 'mains-50hz', type: 'interference-risk', note: 'ELF environmental overlap', weight: 0.75 },
+      { targetId: 'mains-60hz', type: 'interference-risk', note: 'ELF environmental overlap', weight: 0.75 },
+    ],
   },
   {
     id: 'schumann-2',
@@ -146,6 +152,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '14.3 Hz: second Schumann harmonic. Higher harmonics appear at ~20.8, 27.3, 33.8 Hz. These are not acoustic; they are ELF electromagnetic resonances.',
     color: C.natural,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'schumann-1', type: 'harmonic', note: 'Fundamental mode', weight: 1 },
+      { targetId: 'schumann-3', type: 'harmonic', note: 'Next harmonic', weight: 0.9 },
+    ],
   },
   {
     id: 'schumann-3',
@@ -158,6 +168,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '20.8 Hz: third Schumann harmonic. Monitored globally as a geophysical index; correlates with thunderstorm activity.',
     color: C.natural,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'schumann-2', type: 'harmonic', note: 'Previous harmonic', weight: 0.9 },
+      { targetId: 'schumann-1', type: 'harmonic', note: 'Fundamental mode', weight: 0.85 },
+    ],
   },
   {
     id: 'mains-50hz',
@@ -170,6 +184,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '50 Hz AC mains frequency used in Europe, Australia, most of Asia and Africa. Grid-coupled interference dominates below 1 kHz in urban EM environments.',
     color: C.power,
     minZoom: 3,
+    curatedRelations: [
+      { targetId: 'mains-60hz', type: 'same-system', note: 'Regional mains counterpart', weight: 1 },
+      { targetId: 'schumann-1', type: 'interference-risk', note: 'Low-frequency field context', weight: 0.7 },
+    ],
   },
   {
     id: 'mains-60hz',
@@ -182,6 +200,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '60 Hz AC mains used in North America, Japan, and parts of South America. 60 Hz harmonics (120, 180, 300 Hz…) are common interference sources.',
     color: C.power,
     minZoom: 3,
+    curatedRelations: [
+      { targetId: 'mains-50hz', type: 'same-system', note: 'Regional mains counterpart', weight: 1 },
+      { targetId: 'schumann-1', type: 'interference-risk', note: 'Low-frequency field context', weight: 0.7 },
+    ],
   },
   {
     id: 'hydrogen-line',
@@ -194,6 +216,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '1420.405752 MHz: hyperfine transition of neutral hydrogen (spin-flip). The most abundant emission line in the galaxy; protected radio astronomy allocation globally (1400–1427 MHz). Used to map galactic structure.',
     color: C.natural,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'gps-l2', type: 'adjacent-service', note: 'Same broad L-band ecosystem', weight: 0.6 },
+      { targetId: 'gps-l1', type: 'adjacent-service', note: 'Nearby navigation service in upper L-band', weight: 0.5 },
+    ],
   },
 
   // ── VLF SUBMARINE COMMUNICATIONS ──────────────────────────────────────────
@@ -1180,6 +1206,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '1176.45 MHz: GPS L5 (safety-of-life) and Galileo E5a. BPSK(10) modulation, 24 MHz BW. Higher power, protected allocation, dual-frequency civilian ionospheric correction. Aviation SBAS use.',
     color: C.gps,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'gps-l1', type: 'same-system', note: 'Primary civilian pair for navigation fixes', weight: 1 },
+      { targetId: 'gps-l2', type: 'same-system', note: 'Dual-frequency ionosphere correction set', weight: 0.95 },
+      { targetId: 'aviation-dme', type: 'shared-allocation', note: 'Aviation-critical navigation neighborhood', weight: 0.7 },
+    ],
   },
   {
     id: 'gps-l2',
@@ -1192,6 +1223,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '1227.6 MHz: GPS L2. Originally military-only P(Y) code. L2C civilian signal added Block IIR-M. Dual-frequency L1+L2 eliminates ionospheric error to 1–5 cm level.',
     color: C.gps,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'gps-l1', type: 'same-system', note: 'Classic dual-frequency pairing', weight: 1 },
+      { targetId: 'gps-l5', type: 'same-system', note: 'Modern civilian multi-frequency stack', weight: 0.9 },
+      { targetId: 'hydrogen-line', type: 'adjacent-service', note: 'L-band scientific proximity', weight: 0.5 },
+    ],
   },
   {
     id: 'beidou-b1i',
@@ -1216,6 +1252,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '1575.42 MHz: primary civil GPS L1 C/A (BPSK), Galileo E1 (CBOC), SBAS (WAAS/EGNOS/MSAS). Protected aeronautical radionavigation allocation. Received by all consumer GNSS chips.',
     color: C.gps,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'gps-l2', type: 'same-system', note: 'High-accuracy dual-frequency baseline', weight: 1 },
+      { targetId: 'gps-l5', type: 'same-system', note: 'Safety-of-life and robustness pairing', weight: 0.9 },
+      { targetId: 'glonass-l1', type: 'same-system', note: 'Multi-constellation receiver context', weight: 0.8 },
+    ],
   },
   {
     id: 'glonass-l1',
@@ -1306,6 +1347,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '2.400–2.4835 GHz shared ISM range used by WiFi (802.11b/g/n/ax), Bluetooth, Zigbee (802.15.4), and microwave oven leakage (2.45 GHz ISM center).',
     color: C.wifi_24,
     minZoom: 8,
+    curatedRelations: [
+      { targetId: 'wifi-24-mid', type: 'measurement-reference', note: 'Band center reference', weight: 1 },
+      { targetId: 'bluetooth-classic-overview', type: 'shared-allocation', note: 'Coexisting 2.4 GHz systems', weight: 0.95 },
+      { targetId: 'wifi-24-ch14', type: 'adjacent-service', note: 'Regional edge-case channel', weight: 0.7 },
+    ],
   },
   {
     id: 'bluetooth-ble-adv-37',
@@ -1318,6 +1364,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: 'Bluetooth LE primary advertising channel 37 at 2.402 GHz. Avoids WiFi ch1 (2.412 GHz). Used for connectable advertising, scanning, and initiating connections.',
     color: C.ble,
     minZoom: 24,
+    curatedRelations: [
+      { targetId: 'bluetooth-ble-adv-38', type: 'same-system', note: 'BLE advertising set', weight: 1 },
+      { targetId: 'bluetooth-ble-adv-39', type: 'same-system', note: 'BLE advertising set', weight: 1 },
+      { targetId: 'wifi-24-ism', type: 'shared-allocation', note: '2.4 GHz coexistence context', weight: 0.8 },
+    ],
   },
   {
     id: 'bluetooth-ble-adv-38',
@@ -1330,6 +1381,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: 'Bluetooth LE primary advertising channel 38 at 2.426 GHz. Sits in the gap between WiFi ch1 and ch6, minimising co-channel interference.',
     color: C.ble,
     minZoom: 24,
+    curatedRelations: [
+      { targetId: 'bluetooth-ble-adv-37', type: 'same-system', note: 'BLE advertising set', weight: 1 },
+      { targetId: 'bluetooth-ble-adv-39', type: 'same-system', note: 'BLE advertising set', weight: 1 },
+      { targetId: 'wifi-24-mid', type: 'measurement-reference', note: 'Near ISM center reference', weight: 0.8 },
+    ],
   },
   {
     id: 'bluetooth-ble-adv-39',
@@ -1342,6 +1398,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: 'Bluetooth LE primary advertising channel 39 at 2.480 GHz. Located above the highest WiFi 2.4 GHz channel (13/14), avoiding WiFi overlap.',
     color: C.ble,
     minZoom: 24,
+    curatedRelations: [
+      { targetId: 'bluetooth-ble-adv-37', type: 'same-system', note: 'BLE advertising set', weight: 1 },
+      { targetId: 'bluetooth-ble-adv-38', type: 'same-system', note: 'BLE advertising set', weight: 1 },
+      { targetId: 'wifi-24-ch14', type: 'interference-risk', note: 'Close to channel 14 center', weight: 0.85 },
+    ],
   },
   {
     id: 'wifi-24-ch14',
@@ -1354,6 +1415,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '2484 MHz: WiFi Channel 14 at 2484 MHz, legal only in Japan and only for 802.11b (DSSS). Heavily overlaps BLE advertising channel 39 at 2480 MHz. Prohibited elsewhere.',
     color: C.wifi_24,
     minZoom: 18,
+    curatedRelations: [
+      { targetId: 'bluetooth-ble-adv-39', type: 'interference-risk', note: 'Near-overlap in upper 2.4 GHz edge', weight: 1 },
+      { targetId: 'wifi-24-ism', type: 'same-system', note: 'Part of 2.4 GHz ISM ecosystem', weight: 0.8 },
+    ],
   },
   {
     id: 'wifi-24-mid',
@@ -1366,6 +1431,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '2.45 GHz: ISM center. Microwave ovens leak here (2.45 GHz ± 50 MHz). ISM allocations at 2.400–2.500 GHz in ITU Table of Frequency Allocations.',
     color: C.wifi_24,
     minZoom: 20,
+    curatedRelations: [
+      { targetId: 'wifi-24-ism', type: 'measurement-reference', note: 'Nominal center of the ISM slice', weight: 1 },
+      { targetId: 'bluetooth-classic-overview', type: 'shared-allocation', note: 'Band occupancy anchor', weight: 0.85 },
+    ],
   },
   {
     id: 'bluetooth-classic-overview',
@@ -1378,6 +1447,12 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '2402–2480 MHz: Bluetooth Classic 79-channel FHSS (1 MHz channels). BR 1 Mbps GFSK, EDR 2/3 Mbps π/4-DQPSK & 8DPSK. BLE uses same band with 40 wider channels. Bluetooth 5.x.',
     color: C.ble,
     minZoom: 8,
+    curatedRelations: [
+      { targetId: 'wifi-24-ism', type: 'shared-allocation', note: 'Same 2.4 GHz band', weight: 1 },
+      { targetId: 'bluetooth-ble-adv-37', type: 'same-system', note: 'BLE coexistence', weight: 0.9 },
+      { targetId: 'bluetooth-ble-adv-38', type: 'same-system', note: 'BLE coexistence', weight: 0.9 },
+      { targetId: 'bluetooth-ble-adv-39', type: 'same-system', note: 'BLE coexistence', weight: 0.9 },
+    ],
   },
 
   // ── LTE HIGH BANDS ────────────────────────────────────────────────────────
@@ -1406,6 +1481,9 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '3400–3800 MHz: 5G NR Band n78, the global 5G "C-band" workhorse. 100 MHz channels, 4×4 MIMO, sub-ms latency. 3.5 GHz mid-band reaches ~1 km per cell. EU, Asia, AU primary 5G.',
     color: C.nr5g,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'satellite-cband-downlink', type: 'shared-allocation', note: 'C-band repack/coordination region', weight: 0.9 },
+    ],
   },
   {
     id: 'satellite-cband-downlink',
@@ -1418,6 +1496,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '3700–4200 MHz: FSS C-band satellite downlink. 500 MHz of 36 MHz transponders. Intelsat, SES, Eutelsat. Protected in US (TVRO); partially cleared for 5G n77/n78. Low rain fade.',
     color: C.satellite,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'cband-satellite-uplink', type: 'same-system', note: 'Paired FSS uplink/downlink', weight: 1 },
+      { targetId: 'nr5g-n78-cband', type: 'shared-allocation', note: 'C-band coexistence policy', weight: 0.9 },
+    ],
   },
 
   // ── WiFi 5 GHz OVERVIEW BANDS ──────────────────────────────────────────────
@@ -1432,6 +1514,13 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5150–5895 MHz: IEEE 802.11a/n/ac/ax. Four UNII sub-bands (UNII-1 through UNII-3/UNII-3B). DFS/TPC required for UNII-2 to protect weather and terminal Doppler radars.',
     color: C.wifi_5,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'wifi-5-unii1', type: 'same-system', note: 'UNII-1 segment', weight: 1 },
+      { targetId: 'wifi-5-unii2a', type: 'same-system', note: 'UNII-2A segment', weight: 1 },
+      { targetId: 'wifi-5-unii2c', type: 'same-system', note: 'UNII-2C segment', weight: 1 },
+      { targetId: 'wifi-5-unii3', type: 'same-system', note: 'UNII-3 segment', weight: 1 },
+      { targetId: 'wifi-6e-overview', type: 'adjacent-service', note: '6 GHz extension path', weight: 0.8 },
+    ],
   },
   {
     id: 'wifi-5-unii1',
@@ -1444,6 +1533,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5150–5250 MHz: UNII-1, indoor only in some regions, 200 mW EIRP. Channels 36–48. No DFS required. Used for 802.11a/n/ac/ax; low interference typically.',
     color: C.wifi_5,
     minZoom: 8,
+    curatedRelations: [
+      { targetId: 'wifi-5-full-overview', type: 'same-system', note: 'Parent 5 GHz profile', weight: 1 },
+      { targetId: 'wifi-5-unii2a', type: 'adjacent-service', note: 'Next 5 GHz regulatory block', weight: 0.8 },
+    ],
   },
   {
     id: 'wifi-5-unii2a',
@@ -1456,6 +1549,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5250–5350 MHz: UNII-2A, DFS/TPC mandatory (radar detection 1 min, 30 min CAC). Channels 52–64. Less congested than UNII-1 due to DFS requirement.',
     color: C.wifi_5,
     minZoom: 8,
+    curatedRelations: [
+      { targetId: 'wifi-5-full-overview', type: 'same-system', note: 'Parent 5 GHz profile', weight: 1 },
+      { targetId: 'wifi-5-unii2c', type: 'adjacent-service', note: 'Extended DFS segment', weight: 0.85 },
+      { targetId: 'marine-radar-xband', type: 'interference-risk', note: 'Radar-protection regime context (DFS logic)', weight: 0.5 },
+    ],
   },
   {
     id: 'wifi-5-unii2c',
@@ -1468,6 +1566,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5470–5725 MHz: UNII-2C extended DFS, 1 W EIRP. Channels 100–144. Collocated with weather radar (5600–5650 MHz) and TDWR airports. Long CAC (10 min on some channels).',
     color: C.wifi_5,
     minZoom: 8,
+    curatedRelations: [
+      { targetId: 'wifi-5-full-overview', type: 'same-system', note: 'Parent 5 GHz profile', weight: 1 },
+      { targetId: 'wifi-5-unii3', type: 'adjacent-service', note: 'Upper non-DFS segment', weight: 0.8 },
+      { targetId: 'wifi-5-unii2a', type: 'adjacent-service', note: 'Lower DFS segment', weight: 0.85 },
+    ],
   },
   {
     id: 'wifi-5-unii3',
@@ -1480,6 +1583,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5725–5850 MHz: UNII-3, no DFS, 4 W EIRP. Channels 149–165. Outdoor AP backhaul common. Overlaps 5.8 GHz ISM. Also used for 802.11p vehicle comms predecessor.',
     color: C.wifi_5,
     minZoom: 8,
+    curatedRelations: [
+      { targetId: 'wifi-5-full-overview', type: 'same-system', note: 'Parent 5 GHz profile', weight: 1 },
+      { targetId: 'ism-5800', type: 'shared-allocation', note: 'Strong overlap with 5.8 GHz ISM', weight: 0.95 },
+      { targetId: 'dsrc-cv2x', type: 'adjacent-service', note: 'Upper edge transportation services', weight: 0.7 },
+    ],
   },
 
   // ── 5.8 GHz ISM ────────────────────────────────────────────────────────────
@@ -1494,6 +1602,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5.725–5.875 GHz: ISM band overlapping UNII-3 WiFi (ch149–165), FPV drone video links, some cordless phones, microwave backhaul, and consumer wireless video transmitters.',
     color: C.ism,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'wifi-5-unii3', type: 'shared-allocation', note: 'Unlicensed coexistence hotspot', weight: 1 },
+      { targetId: 'dsrc-cv2x', type: 'adjacent-service', note: 'Transport allocation right above', weight: 0.8 },
+    ],
   },
 
   // ── C-V2X / DSRC ──────────────────────────────────────────────────────────
@@ -1508,6 +1620,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5850–5925 MHz: DSRC (IEEE 802.11p / WAVE) and C-V2X (3GPP PC5 Rel-14) for vehicle-to-vehicle and infrastructure safety. 7 × 10 MHz channels (US). Partially reallocated to WiFi 6E in 2020 FCC ruling.',
     color: C.ism,
     minZoom: 6,
+    curatedRelations: [
+      { targetId: 'ism-5800', type: 'adjacent-service', note: 'Boundary with ISM/WiFi activity', weight: 0.9 },
+      { targetId: 'wifi-6e-overview', type: 'shared-allocation', note: 'Regulatory repack context', weight: 0.85 },
+    ],
   },
 
   // ── WiFi 6E overview ──────────────────────────────────────────────────────
@@ -1522,6 +1638,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5.925–7.125 GHz: IEEE 802.11ax Wi-Fi 6E. Full 1.2 GHz allocation (US/Brazil/South Korea), 500 MHz in EU (5.925–6.425 GHz). 59 non-overlapping 20 MHz channels; 160 MHz channels possible. New devices only (no legacy).',
     color: C.wifi_6e,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'wifi-5-full-overview', type: 'same-system', note: 'WiFi evolution from 5 GHz to 6 GHz', weight: 1 },
+      { targetId: 'dsrc-cv2x', type: 'shared-allocation', note: 'Reallocation boundary in some regions', weight: 0.85 },
+      { targetId: 'cband-satellite-uplink', type: 'adjacent-service', note: 'Coexistence at lower 6 GHz edge', weight: 0.75 },
+    ],
   },
   {
     id: 'cband-satellite-uplink',
@@ -1534,6 +1655,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '5925–6425 MHz: FSS C-band earth-station uplink. 500 MHz bandwidth, paired with 3.7–4.2 GHz downlink. VSAT and large dish uplinks for broadcast and enterprise.',
     color: C.satellite,
     minZoom: 5,
+    curatedRelations: [
+      { targetId: 'satellite-cband-downlink', type: 'same-system', note: 'Paired FSS downlink companion', weight: 1 },
+      { targetId: 'wifi-6e-overview', type: 'shared-allocation', note: 'Lower 6 GHz coexistence concerns', weight: 0.8 },
+    ],
   },
 
   // ── X-BAND / Ku-BAND ──────────────────────────────────────────────────────
@@ -1548,6 +1673,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '9300–9500 MHz: X-band marine navigation radar (IMO/ITU-R M.1313), airport surface movement radar, and weather radar. 3 cm wavelength. 25–50 kW peak power typical.',
     color: C.radar,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'police-radar-xband', type: 'same-system', note: 'Same X-band ecosystem, different use-case', weight: 1 },
+      { targetId: 'kband-ism-speed-radar', type: 'same-system', note: 'Common speed-radar progression', weight: 0.85 },
+    ],
   },
   {
     id: 'police-radar-xband',
@@ -1560,6 +1689,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '10.525 GHz: classic X-band police Doppler speed radar (FCC Part 90). CW FMCW. Range ~450 m. Being replaced by K-band (24.125 GHz) and Ka-band (34.7 GHz). Detectable by dash-mount detectors.',
     color: C.radar,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'marine-radar-xband', type: 'same-system', note: 'X-band radar neighborhood', weight: 1 },
+      { targetId: 'kband-ism-speed-radar', type: 'same-system', note: 'Migration path toward K-band systems', weight: 0.9 },
+    ],
   },
   {
     id: 'ku-band-dbs-downlink',
@@ -1598,6 +1731,11 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '24.0–24.25 MHz ISM: K-band police speed radar (24.125 GHz) and industrial level sensors. 1.25 cm wavelength. Also used for short-range automotive radar (24 GHz FMCW, being phased out for 77 GHz).',
     color: C.radar,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'police-radar-xband', type: 'same-system', note: 'Legacy speed-radar band family', weight: 0.9 },
+      { targetId: 'auto-radar-76-77', type: 'same-system', note: 'Automotive radar transition to 77 GHz', weight: 1 },
+      { targetId: 'auto-radar-77-81', type: 'same-system', note: 'Modern SRR/LRR allocation', weight: 0.95 },
+    ],
   },
 
   // ── 5G FR2 mmWAVE ─────────────────────────────────────────────────────────
@@ -1660,6 +1798,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '76–77 GHz: ACC (Adaptive Cruise Control) long-range automotive FMCW radar. 1 GHz BW → 15 cm range resolution; 200 m range. ETSI EN 301 091-1. All modern cars ≥2020.',
     color: C.auto_radar,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'auto-radar-77-81', type: 'same-system', note: 'Companion short-range allocation', weight: 1 },
+      { targetId: 'kband-ism-speed-radar', type: 'same-system', note: 'Historical migration from 24 GHz', weight: 0.85 },
+    ],
   },
   {
     id: 'auto-radar-77-81',
@@ -1672,6 +1814,10 @@ export const frequencyFeatures: FrequencyFeature[] = [
     detail: '77–81 GHz: short/mid-range automotive radar (blind-spot, cross-traffic, parking assist). 4 GHz BW → 3.75 cm range resolution. ETSI EN 302 858. Increasingly AiP (antenna-in-package) chipsets.',
     color: C.auto_radar,
     minZoom: 4,
+    curatedRelations: [
+      { targetId: 'auto-radar-76-77', type: 'same-system', note: 'Companion long-range allocation', weight: 1 },
+      { targetId: 'kband-ism-speed-radar', type: 'same-system', note: 'Historical migration from 24 GHz', weight: 0.85 },
+    ],
   },
   {
     id: 'wband-security',
@@ -1693,3 +1839,77 @@ export const frequencyFeatures: FrequencyFeature[] = [
   ...wifi6eChannels,
   ...universalVibrationFeatures,
 ]
+
+const MODULATION_BY_ID: Record<string, string[]> = {
+  'am-mw-overview': ['AM', 'DSB-AM'],
+  'fm-broadcast-overview': ['FM', 'WBFM'],
+  'nfc-hf-rfid-13mhz': ['ASK', 'PSK', 'Load Modulation'],
+  'wwvb-msf-60': ['AM', 'BPSK'],
+  'dcf77-77k': ['ASK', 'BPSK'],
+  'navtex-518': ['SITOR-B', 'FSK'],
+  'maritime-mf-distress-2182': ['USB', 'J3E SSB'],
+  'kband-ism-speed-radar': ['FMCW', 'CW Doppler'],
+  'auto-radar-76-77': ['FMCW'],
+  'auto-radar-77-81': ['FMCW'],
+  'wigig-60ghz': ['OFDM', 'SC-FDE'],
+}
+
+const MODULATION_BY_FAMILY: Record<string, string[]> = {
+  'WiFi 2.4 GHz': ['OFDM', 'DSSS', 'CCK'],
+  'WiFi 5 GHz': ['OFDM'],
+  'WiFi 6E (6 GHz)': ['OFDMA', 'OFDM'],
+  'Zigbee 2.4 GHz': ['O-QPSK DSSS'],
+  'Bluetooth Classic': ['GFSK', 'pi/4-DQPSK', '8DPSK'],
+  'Bluetooth LE': ['GFSK'],
+  LoRaWAN: ['CSS'],
+  'LoRaWAN EU868': ['CSS'],
+  'LoRaWAN US915': ['CSS'],
+  'LoRaWAN AS923': ['CSS'],
+  'GNSS': ['BPSK', 'BOC', 'QPSK'],
+  'GSM Cellular': ['GMSK', '8-PSK'],
+  'UMTS 3G': ['WCDMA QPSK'],
+  'LTE Cellular': ['OFDMA', 'SC-FDMA'],
+  '5G NR Sub-6': ['CP-OFDM', 'DFT-s-OFDM'],
+  '5G NR mmWave': ['CP-OFDM', 'DFT-s-OFDM'],
+  'VLF Submarine Comms': ['MSK', 'FSK'],
+  'LF RFID': ['ASK', 'FSK', 'PSK'],
+  'UHF RFID': ['ASK', 'PR-ASK', 'DSB-ASK', 'PSK'],
+  'HF RFID / NFC': ['ASK', 'PSK', 'Load Modulation'],
+  'HF Time Standards': ['AM', 'BPSK'],
+  'DAB Digital Radio': ['COFDM'],
+  'Television Broadcast': ['OFDM', '8VSB'],
+  'TETRA PMR': ['pi/4-DQPSK'],
+  'DECT': ['GFSK'],
+  'Wireless M-Bus': ['2-FSK', '4-FSK'],
+  'Maritime VHF': ['FM', 'GMSK AIS'],
+  'Aviation ATC': ['AM'],
+  'Aviation Navigation': ['AM', 'Pulse'],
+  'Radar': ['Pulse', 'FMCW', 'CW Doppler'],
+  Satellite: ['QPSK', '8PSK', '16APSK'],
+  'WiGig mmWave': ['OFDM', 'SC-FDE'],
+  'Vehicular Comms': ['OFDM', 'SC-FDMA'],
+}
+
+function withModulationMetadata(feature: FrequencyFeature): FrequencyFeature {
+  const modulationTypes = MODULATION_BY_ID[feature.id] ?? MODULATION_BY_FAMILY[feature.family]
+  if (!modulationTypes || modulationTypes.length === 0) return feature
+
+  const hasModulationInDetail = /\bmodulation\b/i.test(feature.detail)
+  const detail = hasModulationInDetail
+    ? feature.detail
+    : `${feature.detail} Common modulation: ${modulationTypes.join(', ')}.`
+
+  const aliases = Array.from(new Set([
+    ...(feature.aliases ?? []),
+    ...modulationTypes.map(item => item.toLowerCase()),
+  ]))
+
+  return {
+    ...feature,
+    detail,
+    aliases,
+    modulationTypes,
+  }
+}
+
+export const frequencyFeatures: FrequencyFeature[] = baseFrequencyFeatures.map(withModulationMetadata)

@@ -140,6 +140,13 @@ export default function ShaderBackground() {
     const canvas = canvasRef.current
     if (!canvas) return
 
+    // Skip shader on low-end mobile devices (narrow viewport + touch)
+    const isMobile = window.innerWidth < 768 && ('ontouchstart' in window)
+    if (isMobile) {
+      // CSS gradient fallback is sufficient for mobile
+      return
+    }
+
     // body { background: #050508 } is a block-level background that paints ABOVE
     // position:fixed z-index:-10 elements in the root stacking context, covering
     // the shader entirely. Make it transparent so the canvas shows through.
@@ -208,11 +215,14 @@ export default function ShaderBackground() {
   }, [])
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full pointer-events-none"
-      style={{ zIndex: -10 }}
-      aria-hidden="true"
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="shader-canvas fixed inset-0 w-full h-full pointer-events-none"
+        style={{ zIndex: -10 }}
+        aria-hidden="true"
+      />
+      <div className="shader-mobile-fallback" aria-hidden="true" />
+    </>
   )
 }

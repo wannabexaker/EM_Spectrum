@@ -1,94 +1,48 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
-import { DETAIL_LAYER_LABELS } from '@/lib/spectrum/detailLayerClassifier'
-import type { SpectrumDetailDensity, SpectrumDetailLayerKey } from '@/types/spectrum'
+import { encodeViewportState } from '@/lib/deeplink/urlState'
+import type { SpectrumDetailDensity } from '@/types/spectrum'
 
 const OPTIONS: Array<{ value: SpectrumDetailDensity; label: string; title: string }> = [
-  { value: 'clean', label: 'Clean', title: 'Minimal overview' },
-  { value: 'details', label: 'Details', title: 'Balanced POI density' },
-  { value: 'max', label: 'Max', title: 'Maximum technical detail' },
-]
-
-const PANEL_ITEMS: SpectrumDetailLayerKey[] = [
-  'pointsOfInterest',
-  'technologies',
-  'channels',
-  'regulations',
-  'hazards',
-  'natural',
+  { value: 'clean', label: 'Low', title: 'Low detail density' },
+  { value: 'details', label: 'Mid', title: 'Balanced detail density' },
+  { value: 'max', label: 'High', title: 'Maximum detail density' },
 ]
 
 export function DetailDensityToggle() {
   const detailDensity = useSpectrumStore(s => s.detailDensity)
   const setDetailDensity = useSpectrumStore(s => s.setDetailDensity)
-  const detailLayers = useSpectrumStore(s => s.detailLayers)
-  const toggleDetailLayer = useSpectrumStore(s => s.toggleDetailLayer)
-  const [panelOpen, setPanelOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!panelOpen) return
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setPanelOpen(false)
+    if (typeof window === 'undefined') return
+    const state = useSpectrumStore.getState()
+    encodeViewportState(state.centerFrequency, state.zoomLevel, detailDensity)
+
+    try {
+      window.localStorage.setItem('density-pref-v1', detailDensity)
+    } catch {
+      // Ignore storage failures (privacy mode or restricted environments).
     }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPanelOpen(false)
-    }
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [panelOpen])
+  }, [detailDensity])
 
   return (
-    <div
-      ref={rootRef}
-      className="density-control"
-      onContextMenu={event => {
-        event.preventDefault()
-        setPanelOpen(open => !open)
-      }}
-    >
-      <div className="density-pill" role="group" aria-label="Spectrum detail density" title="Right click: layer panel">
-        {OPTIONS.map((option, index) => (
+    <div className="density-control">
+      <div className="density-pill" role="group" aria-label="Spectrum detail density">
+        {OPTIONS.map(option => (
           <button
             key={option.value}
-            className={`density-dot-btn ${detailDensity === option.value ? 'active' : ''}`}
+            className={`density-level-btn ${detailDensity === option.value ? 'active' : ''}`}
             onClick={() => setDetailDensity(option.value)}
             aria-label={option.label}
             aria-pressed={detailDensity === option.value}
-            title={`${option.label}: ${option.title}`}
+            title={option.title}
           >
-            <span className={`density-dot dot-${index + 1}`} />
+            {option.label}
           </button>
         ))}
-        <span className="density-label" aria-hidden>
-          {OPTIONS.find(o => o.value === detailDensity)?.label}
-        </span>
       </div>
-
-      {panelOpen && (
-        <div className="density-panel" role="menu" aria-label="Detail layer panel">
-          <div className="density-panel-title">Detail Layers</div>
-          {PANEL_ITEMS.map(item => (
-            <button
-              key={item}
-              className={`density-panel-row ${detailLayers[item] ? 'active' : 'inactive'}`}
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={detailLayers[item]}
-              onClick={() => toggleDetailLayer(item)}
-            >
-              <span className="density-panel-check" />
-              <span>{DETAIL_LAYER_LABELS[item]}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

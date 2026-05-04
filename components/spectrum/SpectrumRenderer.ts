@@ -2,13 +2,20 @@
 // Phase 15 — Visible Spectrum Gradient Rendering
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js'
 import type { FrequencyFeature, SpectrumBand, SpectrumCategory, SpectrumDetailDensity, SpectrumDetailLayers, SpectrumMode, ZoomState } from '@/types/spectrum'
-import { F_MIN, LOG_RANGE, freqToScreenX } from '@/lib/zoom/logMapper'
+import { F_MIN, LOG_RANGE, formatFrequency, freqToScreenX } from '@/lib/zoom/logMapper'
 import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
 import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
+import {
+  getEducationalSpacingForDensity,
+  getFeatureZoomBoostForDensity,
+  getProfessionalLabelSpacingForDensity,
+  getProfessionalVisibilityThresholdForDensity,
+  getProfessionalZoomBoostForDensity,
+} from '@/lib/spectrum/detailDensityProfiles'
 
 const POOL_SIZE = 600
 const TRACK_H_RATIO = 0.07      // track height as fraction of canvas height
@@ -97,15 +104,36 @@ export class SpectrumRenderer {
     const app = new Application()
     this.app = app
 
-    await app.init({
-      canvas: this.canvas,
-      width: this.canvas.clientWidth || 800,
-      height: this.canvas.clientHeight || 400,
-      backgroundColor: 0x050508,
-      antialias: true,
-      resolution: window.devicePixelRatio || 1,
-      autoDensity: true,
-    })
+    const isMobile =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(pointer: coarse)').matches
+    const baseWidth = this.canvas.clientWidth || 800
+    const baseHeight = this.canvas.clientHeight || 400
+
+    try {
+      await app.init({
+        canvas: this.canvas,
+        width: baseWidth,
+        height: baseHeight,
+        backgroundColor: 0x050508,
+        antialias: !isMobile,
+        resolution: Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2),
+        autoDensity: true,
+        preference: 'webgl',
+      })
+    } catch {
+      // Mobile fallback: minimum-cost WebGL init to avoid long "initializing" stalls.
+      await app.init({
+        canvas: this.canvas,
+        width: baseWidth,
+        height: baseHeight,
+        backgroundColor: 0x050508,
+        antialias: false,
+        resolution: 1,
+        autoDensity: true,
+        preference: 'webgl',
+      })
+    }
 
     // Fast unmount: destroy() was called while init() was awaiting.
     // app.init() just completed so PixiJS internals (_cancelResize etc.) ARE wired —
@@ -446,9 +474,11 @@ export class SpectrumRenderer {
     density: SpectrumDetailDensity,
     detailLayers: SpectrumDetailLayers
   ): void {
-    if (density === 'clean') return
-
-    const zoomBoost = density === 'max' ? 0.52 : 1
+    const zoomBoost = getFeatureZoomBoostForDensity(density, mode)
+    const lastLabelRightByLane = new Map<string, number>()
+    const minLabelSpacing = density === 'max' ? 44 : density === 'details' ? 58 : 78
+    const alwaysShowFrequencyLabels = density !== 'clean'
+    const minLabelVisibility = density === 'max' ? 0.12 : density === 'details' ? 0.16 : 0.2
 
     for (const feature of features) {
       if (!isFeatureVisibleInMode(feature, mode)) continue
@@ -473,7 +503,9 @@ export class SpectrumRenderer {
 
       const isHovered = this._hoveredFeatureId === feature.id
       const isSelected = this._selectedFeatureId === feature.id
-      const dotScale = isHovered ? 1 + 0.9 * visibility : isSelected ? 1.52 : 1
+      // Selected = full hover visuals (popup is open → show exactly what you clicked)
+      const isActive = isHovered || isSelected
+      const dotScale = isActive ? 1 + 0.9 * visibility : 1
 
       // Range visualization for wide features (>50 kHz)
       if (feature.frequency_bandwidth > 50000) {
@@ -481,26 +513,24 @@ export class SpectrumRenderer {
         const x1 = freqToScreenX(Math.max(F_MIN, feature.frequency_center - half), W, state.centerFrequency, state.zoomLevel)
         const x2 = freqToScreenX(feature.frequency_center + half, W, state.centerFrequency, state.zoomLevel)
         const bw = Math.max(2, Math.min(Math.abs(x2 - x1), W * 0.8))
-        const rangeAlpha = isHovered ? 0.14 * visibility : isSelected ? 0.11 * visibility : 0.055 * visibility
+        const rangeAlpha = isActive ? 0.14 * visibility : 0.055 * visibility
 
-        // Hover: aura glow across the full range
-        if (isHovered || isSelected) {
+        // Active: aura glow across the full range
+        if (isActive) {
           const glowH = H * 0.055
-          const baseAlpha = isHovered ? 0.018 : 0.012
           for (let i = 3; i >= 1; i--) {
             marker.rect(x - bw / 2 - i * 4, pinBaseY - glowH / 2 - i * 3, bw + i * 8, glowH + i * 6)
-              .fill({ color, alpha: baseAlpha * i * visibility })
+              .fill({ color, alpha: 0.018 * i * visibility })
           }
         }
 
         marker.rect(x - bw / 2, pinBaseY - H * 0.036, bw, H * 0.072)
           .fill({ color, alpha: rangeAlpha })
 
-        // Range boundary triangles — pointing up at low end, down at high end
-        const triSize = isHovered ? 7 : isSelected ? 6 : 5
-        const triAlpha = (isHovered ? 0.88 : isSelected ? 0.78 : 0.52) * visibility
+        // Range boundary triangles
+        const triSize = isActive ? 7 : 5
+        const triAlpha = (isActive ? 0.88 : 0.52) * visibility
         const triY = pinBaseY
-        // Left boundary: triangle pointing up
         if (x1 > -20 && x1 < W + 20) {
           marker.moveTo(x1, triY - triSize)
                 .lineTo(x1 - triSize * 0.6, triY + triSize * 0.4)
@@ -508,7 +538,6 @@ export class SpectrumRenderer {
                 .closePath()
                 .fill({ color, alpha: triAlpha })
         }
-        // Right boundary: triangle pointing down
         if (x2 > -20 && x2 < W + 20) {
           marker.moveTo(x2, triY + triSize)
                 .lineTo(x2 - triSize * 0.6, triY - triSize * 0.4)
@@ -518,35 +547,56 @@ export class SpectrumRenderer {
         }
       }
 
-      // Hover: outer glow ring around pin cap
-      if (isHovered || isSelected) {
-        const maxRing = isHovered ? 3 : 2
-        const baseAlpha = isHovered ? 0.06 : 0.045
+      // Glow rings around pin cap (hover = 3 rings, always shown when active)
+      if (isActive) {
         for (let ring = 3; ring >= 1; ring--) {
-          if (ring > maxRing) continue
           marker.circle(x, pinBaseY - 16, (2.5 + ring * 3.5) * dotScale)
-            .fill({ color, alpha: baseAlpha * ring * visibility })
+            .fill({ color, alpha: 0.06 * ring * visibility })
         }
       }
 
       // Sharp vertical pin stem
       const pinTopY = pinBaseY - 16
-      const stemAlpha = isHovered ? 0.9 * visibility : isSelected ? 0.84 * visibility : 0.72 * visibility
-      const stemWidth = isHovered ? 1.8 : isSelected ? 1.6 : 1.2
+      const stemAlpha = isActive ? 0.9 * visibility : 0.72 * visibility
+      const stemWidth = isActive ? 1.8 : 1.2
       marker.moveTo(x, pinBaseY).lineTo(x, pinTopY)
         .stroke({ color, alpha: stemAlpha, width: stemWidth })
 
-      // Pin cap — enlarged on hover
+      // Pin cap
       const capR = 2.5 * dotScale
       marker.circle(x, pinTopY, capR).fill({ color, alpha: 0.95 * visibility })
-      marker.circle(x, pinTopY, capR).stroke({ color: 0xffffff, alpha: (isHovered ? 0.55 : isSelected ? 0.48 : 0.18) * visibility, width: isHovered ? 1.0 : isSelected ? 0.9 : 0.5 })
+      marker.circle(x, pinTopY, capR).stroke({ color: 0xffffff, alpha: (isActive ? 0.55 : 0.18) * visibility, width: isActive ? 1.0 : 0.5 })
 
+      // Selected-only: extra outer orbit ring so "locked" state is distinct from transient hover
       if (isSelected) {
-        marker.circle(x, pinTopY, capR + 5.2).stroke({ color, alpha: 0.5 * visibility, width: 1.2 })
+        marker.circle(x, pinTopY, capR + 5.8).stroke({ color, alpha: 0.62 * visibility, width: 1.4 })
+        marker.circle(x, pinTopY, capR + 9.5).stroke({ color, alpha: 0.22 * visibility, width: 0.8 })
       }
 
       container.addChild(marker)
-      // Labels suppressed — all info via hover tooltip
+
+      if (!alwaysShowFrequencyLabels && !isActive) continue
+
+      const laneId = lane.id
+      const lastRight = lastLabelRightByLane.get(laneId) ?? -Infinity
+      if (visibility < minLabelVisibility || x - lastRight < minLabelSpacing) continue
+
+      const frequencyLabel = this.labelPool.pop() ?? new Text({ text: '' })
+      frequencyLabel.text = formatFrequency(feature.frequency_center)
+      frequencyLabel.x = x
+      frequencyLabel.y = pinTopY - 8
+      frequencyLabel.anchor.set(0.5, 1)
+      frequencyLabel.style.fontSize = 8
+      frequencyLabel.style.fill = 0xc6d3e8
+      if (isActive) {
+        frequencyLabel.alpha = 0.62
+      } else {
+        frequencyLabel.alpha = density === 'max' ? 0.36 : 0.3
+      }
+      container.addChild(frequencyLabel)
+
+      const labelWidth = frequencyLabel.width
+      lastLabelRightByLane.set(laneId, x + labelWidth / 2)
     }
   }
 
@@ -600,11 +650,10 @@ export class SpectrumRenderer {
     density: SpectrumDetailDensity,
     detailLayers: SpectrumDetailLayers
   ): void {
-    if (density === 'clean') return
     if (!detailLayers.pointsOfInterest && !detailLayers.technologies) return
 
     const occupiedByLane = new Map<string, number>()
-    const minSpacing = density === 'max' ? 84 : 128
+    const minSpacing = getEducationalSpacingForDensity(density)
 
     for (const example of EDUCATIONAL_EXAMPLES) {
       const x = freqToScreenX(example.frequency, W, state.centerFrequency, state.zoomLevel)
@@ -646,11 +695,12 @@ export class SpectrumRenderer {
     density: SpectrumDetailDensity,
     detailLayers: SpectrumDetailLayers
   ): void {
-    if (density === 'clean') return
     if (!detailLayers.technologies) return
 
     const occupiedByLane = new Map<string, number>()
-    const zoomBoost = density === 'max' ? 0.58 : 1
+    const zoomBoost = getProfessionalZoomBoostForDensity(density)
+    const minLabelSpacing = getProfessionalLabelSpacingForDensity(density)
+    const minVisibilityForLabel = getProfessionalVisibilityThresholdForDensity(density)
 
     for (const tech of PROFESSIONAL_TECH_OVERLAYS) {
       const effectiveMinZoom = Math.max(1, tech.minZoom * zoomBoost)
@@ -676,12 +726,41 @@ export class SpectrumRenderer {
         g.rect(x - width / 2, y - 18, width, 36).fill({ color, alpha: 0.032 * visibility })
       }
 
-      g.moveTo(x, y - 24).lineTo(x, y + 24).stroke({ color, alpha: 0.38 * visibility, width: 0.8 })
-      g.circle(x, y - 24, 3.2).fill({ color, alpha: 0.85 * visibility })
+      // Dashed reference line (3 segments: top, middle gap, bottom)
+      const lineAlpha = 0.32 * visibility
+      g.moveTo(x, y - 26).lineTo(x, y - 8).stroke({ color, alpha: lineAlpha, width: 0.8 })
+      g.moveTo(x, y - 4).lineTo(x, y + 4).stroke({ color, alpha: lineAlpha * 0.55, width: 0.7 })
+      g.moveTo(x, y + 8).lineTo(x, y + 22).stroke({ color, alpha: lineAlpha, width: 0.8 })
+
+      // Diamond (◆) marker — reference/non-selectable convention
+      const dr = 4.2 * visibility + 3.0 * (1 - visibility)  // stays readable at low vis
+      const diamondAlpha = 0.82 * visibility
+      g.moveTo(x,      y - 26 - dr)   // top
+       .lineTo(x + dr, y - 26)        // right
+       .lineTo(x,      y - 26 + dr)   // bottom
+       .lineTo(x - dr, y - 26)        // left
+       .closePath()
+       .fill({ color, alpha: diamondAlpha })
+      // Hollow inner cutout for depth
+      const ir = dr * 0.42
+      g.moveTo(x,      y - 26 - ir)
+       .lineTo(x + ir, y - 26)
+       .lineTo(x,      y - 26 + ir)
+       .lineTo(x - ir, y - 26)
+       .closePath()
+       .fill({ color: 0x050c18, alpha: 0.72 * visibility })
+      // Thin outline ring
+      g.moveTo(x,      y - 26 - dr)
+       .lineTo(x + dr, y - 26)
+       .lineTo(x,      y - 26 + dr)
+       .lineTo(x - dr, y - 26)
+       .closePath()
+       .stroke({ color, alpha: 0.55 * visibility, width: 0.7 })
+
       container.addChild(g)
 
       const lastRight = occupiedByLane.get(tech.category) ?? -Infinity
-      if (visibility < 0.42 || x - lastRight < 96) continue
+      if (visibility < minVisibilityForLabel || x - lastRight < minLabelSpacing) continue
 
       const label = this.labelPool.pop() ?? new Text({ text: '' })
       label.text = tech.label

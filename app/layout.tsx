@@ -1,6 +1,13 @@
-import type { Metadata } from 'next'
-import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar'
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://em-spectrum.vercel.app'),
