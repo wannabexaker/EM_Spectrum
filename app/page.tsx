@@ -26,6 +26,30 @@ export default function LandingPage() {
           Explore the Spectrum →
         </Link>
 
+        <details className="controls-guide" aria-label="Spectrum controls quick reference">
+          <summary className="controls-guide-trigger">Controls quick guide</summary>
+          <div className="controls-guide-panel">
+            <div className="controls-guide-grid">
+              <div className="controls-guide-item">
+                <strong>Arrows</strong>
+                <span>Left/Right move in the same lane. Up/Down switch lane.</span>
+              </div>
+              <div className="controls-guide-item">
+                <strong>Shift + Arrows</strong>
+                <span>Precision POI navigation across nearby points.</span>
+              </div>
+              <div className="controls-guide-item">
+                <strong>Scroll / Pinch</strong>
+                <span>Zoom in and out on a logarithmic scale.</span>
+              </div>
+              <div className="controls-guide-item">
+                <strong>Drag</strong>
+                <span>Pan across frequency decades.</span>
+              </div>
+            </div>
+          </div>
+        </details>
+
         <div className="feature-cards">
           <div className="feature-card">
             <div className="feature-card-icon">📡</div>

@@ -213,11 +213,82 @@ html, body {
   transform: translateY(-2px);
 }
 
+.controls-guide {
+  width: min(680px, 100%);
+  margin: -2.5rem 0 2.5rem;
+  border: 1px solid rgba(116, 214, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(8, 12, 24, 0.58);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.controls-guide-trigger {
+  list-style: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9dddf3;
+  padding: 0.72rem 0.95rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.controls-guide-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.controls-guide[open] .controls-guide-trigger {
+  color: #d2f6ff;
+  border-bottom: 1px solid rgba(116, 214, 255, 0.16);
+}
+
+.controls-guide-panel {
+  padding: 0.8rem 0.95rem 0.95rem;
+}
+
+.controls-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.controls-guide-item {
+  display: grid;
+  gap: 0.16rem;
+  padding: 0.58rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+}
+
+.controls-guide-item strong {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: #dff7ff;
+  letter-spacing: 0.03em;
+}
+
+.controls-guide-item span {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #8fa6c8;
+}
+
 .feature-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.5rem;
   width: 100%;
+}
+
+@media (max-width: 680px) {
+  .controls-guide-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .feature-card {

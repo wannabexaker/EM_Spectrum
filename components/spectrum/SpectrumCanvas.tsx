@@ -131,7 +131,7 @@ export function SpectrumCanvas() {
     touchMoved,
   } = useZoom(canvasRef)
 
-  const { visibleBands } = useSpectrumData(zoomState)
+  const { visibleBands, allBands } = useSpectrumData(zoomState)
   const { width, height } = useViewport(canvasRef)
   const selectBand = useSpectrumStore(s => s.selectBand)
   const setProbe = useSpectrumStore(s => s.setProbe)
@@ -159,9 +159,14 @@ export function SpectrumCanvas() {
       isFeatureVisibleInMode(feature, activeMode) &&
       isFeatureInDensityScope(feature, detailDensity) &&
       isFeatureAllowedByDetailLayers(feature, detailLayers) &&
+      (() => {
+        const lane = getFeatureLane(feature, allBands)
+        if (lane.id === 'sound') return showSound
+        return showEM
+      })() &&
       zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58
     )
-  }, [activeMode, detailDensity, detailLayers, zoomState.zoomLevel, showApplications])
+  }, [activeMode, allBands, detailDensity, detailLayers, zoomState.zoomLevel, showApplications, showEM, showSound])
 
   // Detect coarse pointer after mount (avoids SSR/client hydration mismatch)
   useEffect(() => {
@@ -272,7 +277,7 @@ export function SpectrumCanvas() {
       if (store.selectedFeatureId) {
         const feat = visibleFeatures.find(f => f.id === store.selectedFeatureId)
         if (feat) {
-          const lane = getFeatureLane(feat, visibleBands)
+          const lane = getFeatureLane(feat, allBands)
           const i = lanesOrdered.findIndex(l => l.id === lane.id)
           if (i !== -1) return i
         }
@@ -284,13 +289,34 @@ export function SpectrumCanvas() {
 
     function selectFeature(feat: ReturnType<typeof visibleFeatures[0] extends infer T ? () => T : never> extends never ? (typeof visibleFeatures)[number] : (typeof visibleFeatures)[number]) {
       const store = useSpectrumStore.getState()
-      const lane = getFeatureLane(feat, visibleBands)
+      const lane = getFeatureLane(feat, allBands)
       commitZoom(feat.frequency_center, store.zoomLevel)
       store.setSelectedFeature(feat.id)
       store.setSelectedLane(lane.id)
       store.selectBand(null)
       setPopup({ feature: feat, x: width / 2, y: height * lane.y })
       setEduPopup(null)
+    }
+
+    function getLaneFeatures(laneId: string) {
+      return visibleFeatures
+        .filter(f => getFeatureLane(f, allBands).id === laneId)
+        .sort((a, b) => a.frequency_center - b.frequency_center)
+    }
+
+    function getNearestFeatureIndex(features: typeof visibleFeatures, frequency: number): number {
+      if (features.length === 0) return -1
+      const logTarget = Math.log10(Math.max(frequency, F_MIN))
+      let bestIdx = 0
+      let bestDist = Number.POSITIVE_INFINITY
+      for (let i = 0; i < features.length; i += 1) {
+        const dist = Math.abs(Math.log10(Math.max(features[i].frequency_center, F_MIN)) - logTarget)
+        if (dist < bestDist) {
+          bestDist = dist
+          bestIdx = i
+        }
+      }
+      return bestIdx
     }
 
     const handleNavKey = (e: KeyboardEvent) => {
@@ -322,7 +348,7 @@ export function SpectrumCanvas() {
           if (adjIdx < 0 || adjIdx >= lanesOrdered.length) return
           const adjLane = lanesOrdered[adjIdx]
           const candidates = visibleFeatures.filter(f => {
-            const fl = getFeatureLane(f, visibleBands)
+            const fl = getFeatureLane(f, allBands)
             return fl.id === adjLane.id
           })
           if (candidates.length === 0) return
@@ -341,33 +367,56 @@ export function SpectrumCanvas() {
 
       // ── No Shift ───────────────────────────────────────────────────────
       if (isHoriz) {
-        // ArrowLeft/Right: existing band/feature navigation (pan handled by useZoom)
+        // ArrowLeft/Right: stay in current lane (no cross-lane jumps)
         if (store.selectedBand) {
-          const sorted = [...visibleBands].sort((a, b) => a.frequency_min - b.frequency_min)
+          const bandLaneId = getBandLane(store.selectedBand).id
+          const sorted = visibleBands
+            .filter(b => getBandLane(b).id === bandLaneId)
+            .sort((a, b) => a.frequency_min - b.frequency_min)
           const idx = sorted.findIndex(b => b.id === store.selectedBand!.id)
-          if (idx === -1) return
+          if (idx === -1 || sorted.length === 0) return
           const next = sorted[(idx + dir + sorted.length) % sorted.length]
           e.preventDefault()
           e.stopImmediatePropagation()
           const logCenter = (Math.log10(Math.max(next.frequency_min, 1e-14)) + Math.log10(Math.max(next.frequency_max, 1e-14))) / 2
           commitZoom(Math.pow(10, logCenter), store.zoomLevel)
           store.selectBand(next)
-        } else if (store.selectedFeatureId) {
-          const sorted = [...visibleFeatures].sort((a, b) => a.frequency_center - b.frequency_center)
-          const idx = sorted.findIndex(f => f.id === store.selectedFeatureId)
+        } else {
+          const laneIdx = getCurrentLaneIdx(store.centerFrequency)
+          const laneId = lanesOrdered[laneIdx]?.id ?? lanesOrdered[0]?.id
+          if (!laneId) return
+
+          const sorted = getLaneFeatures(laneId)
+          if (sorted.length === 0) return
+
+          const idx = store.selectedFeatureId
+            ? sorted.findIndex(f => f.id === store.selectedFeatureId)
+            : getNearestFeatureIndex(sorted, store.centerFrequency)
+
           if (idx === -1) return
           const next = sorted[(idx + dir + sorted.length) % sorted.length]
           e.preventDefault()
           e.stopImmediatePropagation()
           selectFeature(next)
         }
-        // if nothing selected → fall through to useZoom pan handler
       } else {
         // ArrowUp/Down: jump to adjacent lane at the same (clamped) frequency
         const laneIdx = getCurrentLaneIdx(store.centerFrequency)
         const adjIdx = laneIdx + dir
         if (adjIdx < 0 || adjIdx >= lanesOrdered.length) return
         const adjLane = lanesOrdered[adjIdx]
+
+        const laneFeatures = getLaneFeatures(adjLane.id)
+        if (laneFeatures.length > 0) {
+          const nearestIdx = getNearestFeatureIndex(laneFeatures, store.centerFrequency)
+          if (nearestIdx !== -1) {
+            e.preventDefault()
+            e.stopImmediatePropagation()
+            selectFeature(laneFeatures[nearestIdx])
+            return
+          }
+        }
+
         // Clamp current center frequency to the target lane's range
         const targetFreq = Math.min(
           Math.max(store.centerFrequency, adjLane.frequencyMin),
@@ -381,7 +430,7 @@ export function SpectrumCanvas() {
 
     window.addEventListener('keydown', handleNavKey, { capture: true })
     return () => window.removeEventListener('keydown', handleNavKey, { capture: true })
-  }, [visibleBands, visibleFeatures, commitZoom, width, height])
+  }, [allBands, visibleBands, visibleFeatures, commitZoom, width, height])
 
   // Resize — throttled by useViewport's ResizeObserver (100ms)
   useEffect(() => {

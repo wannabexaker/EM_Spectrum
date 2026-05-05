@@ -40,12 +40,30 @@ export function getFeatureLane(feature: FrequencyFeature, bands: SpectrumBand[])
     return SPECTRUM_LANE_BY_ID[feature.category] ?? SPECTRUM_LANE_BY_ID.radio
   }
 
-  const parentBand = bands.find(
+  const inRange = bands.filter(
     band =>
-      !band.is_sound_overlay &&
       feature.frequency_center >= band.frequency_min &&
       feature.frequency_center <= band.frequency_max
   )
 
-  return parentBand ? getBandLane(parentBand) : SPECTRUM_LANE_BY_ID.radio
+  const emBand = inRange.find(band => !band.is_sound_overlay)
+  const soundBand = inRange.find(band => band.is_sound_overlay)
+
+  if (emBand && !soundBand) return getBandLane(emBand)
+  if (soundBand && !emBand) return getBandLane(soundBand)
+
+  if (emBand && soundBand) {
+    const haystack = `${feature.label} ${feature.shortLabel ?? ''} ${feature.family} ${feature.detail}`.toLowerCase()
+    const soundLike = /(sound|audio|acoustic|mechanic|vibration|infrasound|ultrasound|rhythm)/.test(haystack)
+    return soundLike ? getBandLane(soundBand) : getBandLane(emBand)
+  }
+
+  if (feature.frequency_center <= SPECTRUM_LANE_BY_ID.sound.frequencyMax) {
+    const haystack = `${feature.label} ${feature.shortLabel ?? ''} ${feature.family} ${feature.detail}`.toLowerCase()
+    if (/(sound|audio|acoustic|mechanic|vibration|infrasound|ultrasound|rhythm)/.test(haystack)) {
+      return SPECTRUM_LANE_BY_ID.sound
+    }
+  }
+
+  return SPECTRUM_LANE_BY_ID.radio
 }
