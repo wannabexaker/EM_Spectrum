@@ -44,9 +44,21 @@ export function SidePanel() {
   const copyDeepLink = async () => {
     if (typeof window === 'undefined') return
     const center = Math.sqrt(selectedBand.frequency_min * selectedBand.frequency_max)
-    const url = new URL(window.location.href)
+    const spanDecades = Math.max(
+      0.08,
+      Math.log10(Math.max(selectedBand.frequency_max, 1e-14)) - Math.log10(Math.max(selectedBand.frequency_min, 1e-14))
+    )
+    const targetZoom = Math.max(6, Math.min(48, 8 / spanDecades))
+
+    const current = new URL(window.location.href)
+    const basePath = current.pathname.includes('/spectrum')
+      ? current.pathname.split('/spectrum')[0]
+      : current.pathname.replace(/\/$/, '')
+    const url = new URL(`${current.origin}${basePath}/spectrum/`)
     url.searchParams.set('f', center.toExponential(3))
-    url.searchParams.set('z', '8')
+    url.searchParams.set('z', targetZoom.toFixed(2))
+    url.searchParams.set('d', 'details')
+
     const shareUrl = url.toString()
 
     try {
