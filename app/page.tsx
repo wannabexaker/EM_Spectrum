@@ -63,20 +63,36 @@ export default function LandingPage() {
                 <h2 className="controls-guide-title">Controls Quick Guide</h2>
                 <div className="controls-guide-grid">
                   <div className="controls-guide-item">
-                    <strong>Arrows</strong>
-                    <span>Left/Right move in the same lane. Up/Down switch lane.</span>
+                    <strong>Arrow Keys</strong>
+                    <span>Left/Right move inside the same lane. Up/Down switch lane.</span>
                   </div>
                   <div className="controls-guide-item">
                     <strong>Shift + Arrows</strong>
-                    <span>Precision POI navigation across nearby points.</span>
+                    <span>Jump between nearby POIs and across adjacent lanes.</span>
                   </div>
                   <div className="controls-guide-item">
-                    <strong>Scroll / Pinch</strong>
-                    <span>Zoom in and out on a logarithmic scale.</span>
+                    <strong>Search (Ctrl/Cmd + K)</strong>
+                    <span>Find bands, tech, and relations. Tab cycles related results.</span>
+                  </div>
+                  <div className="controls-guide-item">
+                    <strong>Left Click / Tap</strong>
+                    <span>Select bands or POIs and open details instantly.</span>
+                  </div>
+                  <div className="controls-guide-item">
+                    <strong>Wheel / Pinch</strong>
+                    <span>Log zoom centered at cursor (or pinch center on mobile).</span>
                   </div>
                   <div className="controls-guide-item">
                     <strong>Drag</strong>
-                    <span>Pan across frequency decades.</span>
+                    <span>Pan across decades. Right-drag on canvas = precise zoom.</span>
+                  </div>
+                  <div className="controls-guide-item">
+                    <strong>Right Column Labels</strong>
+                    <span>Click lane label to navigate there. Right-click for frequency menu.</span>
+                  </div>
+                  <div className="controls-guide-item">
+                    <strong>Layers & Density</strong>
+                    <span>Toggle EM/Sound/Apps/Hazards and switch Low/Mid/High detail.</span>
                   </div>
                 </div>
               </div>
