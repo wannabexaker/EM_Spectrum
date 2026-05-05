@@ -15,7 +15,9 @@ export default function LandingPage() {
 
         <p className="landing-subtitle">
           From 1 Hz to 10²⁶ Hz — explore every frequency in the universe.
-          Infinite zoom. Real-world applications. Full physics detail.
+          Infinite zoom. Real-world applications.
+          <br />
+          Full physics detail.
         </p>
 
         <div className="spectrum-preview" aria-label="Spectrum preview" role="img" />
