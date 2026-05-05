@@ -147,25 +147,36 @@ html, body {
     max-height 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.landing-reveal-block {
+/* ─── Landing Page: Two-Floor Layout ───────────────────────── */
+
+.landing-floor {
   width: 100%;
-  transform: translateY(0);
-  opacity: 0.97;
-  transition:
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 320ms ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  animation: floor-fade-in 0.4s ease-out;
 }
 
-.landing-page.is-guide-open .landing-hero-block {
-  transform: translateY(-130px);
-  opacity: 0;
-  max-height: 0;
-  pointer-events: none;
+@keyframes floor-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.landing-page.is-guide-open .landing-reveal-block {
-  transform: translateY(-96px);
-  opacity: 1;
+.landing-floor-1 {
+  /* Hero floor: centered */
+}
+
+.landing-floor-2 {
+  /* Controls floor: centered with scroll if needed */
+  justify-content: flex-start;
+  padding-top: 5rem;
 }
 
 .landing-eyebrow {
@@ -189,7 +200,6 @@ html, body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  /* text-shadow doesn't work on gradient-clipped text — use drop-shadow filter */
   filter: drop-shadow(0 0 40px rgba(0, 212, 255, 0.45))
           drop-shadow(0 0 12px rgba(199, 125, 255, 0.35))
           drop-shadow(0 4px 24px rgba(0, 0, 0, 0.95));
@@ -225,6 +235,45 @@ html, body {
   50%       { box-shadow: 0 0 50px rgba(0, 212, 255, 0.6); }
 }
 
+/* CTA Group: Button + Down Arrow */
+.cta-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.floor-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  border: 1px solid rgba(116, 214, 255, 0.3);
+  background: rgba(0, 212, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border-radius: 50%;
+  color: #b4dcff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.floor-toggle-btn:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.6);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.floor-toggle-btn:focus-visible {
+  outline: 2px solid rgba(0, 212, 255, 0.58);
+  outline-offset: -2px;
+}
+
 .cta-button {
   display: inline-flex;
   align-items: center;
@@ -241,7 +290,6 @@ html, body {
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s ease;
-  margin-bottom: 4rem;
 }
 .cta-button:hover {
   background: rgba(0, 212, 255, 0.15);
@@ -249,86 +297,49 @@ html, body {
   transform: translateY(-2px);
 }
 
+/* Floor 2: Centered Content */
+.floor-2-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
 .controls-guide {
-  width: min(680px, 100%);
-  margin: -2.5rem 0 2.5rem;
+  width: 100%;
+  max-width: 900px;
   border: 1px solid rgba(116, 214, 255, 0.2);
   border-radius: 12px;
   background: rgba(8, 12, 24, 0.58);
   backdrop-filter: blur(10px);
   overflow: hidden;
+  padding: 1.5rem;
 }
 
-.controls-guide-trigger {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+.controls-guide-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #00d4ff;
+  margin: 0 0 1.5rem;
+  text-align: center;
   text-transform: uppercase;
-  color: #9dddf3;
-  padding: 0.72rem 0.95rem;
-  text-align: left;
-  background: rgba(255, 255, 255, 0.02);
-  border: 0;
-}
-
-.controls-guide-trigger:focus-visible {
-  outline: 2px solid rgba(0, 212, 255, 0.58);
-  outline-offset: -2px;
-}
-
-.controls-guide-arrow {
-  display: inline-flex;
-  font-size: 0.95rem;
-  color: #d2f6ff;
-  transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1), color 240ms ease;
-}
-
-.landing-page.is-guide-open .controls-guide-arrow {
-  transform: translateY(-1px);
-}
-
-.landing-page.is-guide-open .controls-guide-trigger {
-  color: #d2f6ff;
-  border-bottom: 1px solid rgba(116, 214, 255, 0.16);
-}
-
-.controls-guide-panel-wrap {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 360ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.landing-page.is-guide-open .controls-guide-panel-wrap {
-  grid-template-rows: 1fr;
-}
-
-.controls-guide-panel {
-  min-height: 0;
-  overflow: hidden;
-  padding: 0.8rem 0.95rem 0.95rem;
-  opacity: 0;
-  transition: opacity 240ms ease;
-}
-
-.landing-page.is-guide-open .controls-guide-panel {
-  opacity: 1;
+  letter-spacing: 0.05em;
 }
 
 .controls-guide-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
 }
 
 .controls-guide-item {
   display: grid;
   gap: 0.16rem;
-  padding: 0.58rem 0.65rem;
+  padding: 1rem;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
@@ -337,53 +348,25 @@ html, body {
 
 .controls-guide-item strong {
   font-family: var(--font-mono);
-  font-size: 0.74rem;
+  font-size: 0.85rem;
   color: #dff7ff;
   letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .controls-guide-item span {
-  font-size: 0.76rem;
-  line-height: 1.45;
+  font-size: 0.9rem;
+  line-height: 1.5;
   color: #8fa6c8;
+  margin-top: 0.25rem;
 }
 
 .feature-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
   width: 100%;
-}
-
-@media (max-width: 680px) {
-  .controls-guide-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .landing-page.is-guide-open .landing-reveal-block {
-    transform: translateY(-76px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-hero-block,
-  .landing-reveal-block,
-  .controls-guide-panel-wrap,
-  .controls-guide-panel,
-  .controls-guide-arrow {
-    transition: none !important;
-    animation: none !important;
-  }
-
-  .landing-page.is-guide-open .landing-hero-block {
-    transform: none;
-    opacity: 0;
-    max-height: 0;
-  }
-
-  .landing-page.is-guide-open .landing-reveal-block {
-    transform: none;
-  }
+  max-width: 900px;
 }
 
 .feature-card {
@@ -393,20 +376,85 @@ html, body {
   border-radius: 12px;
   padding: 2rem 1.5rem;
   text-align: center;
+  transition: all 0.2s ease;
 }
-.feature-card-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.15);
+}
+
+.feature-card-icon { 
+  font-size: 2.5rem; 
+  margin-bottom: 1rem; 
+  display: inline-block;
+}
+
 .feature-card-title {
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--text-accent);
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.75rem;
 }
+
 .feature-card-desc {
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .landing-floor {
+    padding: 1.5rem 1rem;
+  }
+
+  .landing-floor-2 {
+    padding-top: 3rem;
+  }
+
+  .cta-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 1rem;
+  }
+
+  .floor-toggle-btn {
+    order: -1;
+  }
+
+  .floor-toggle-btn.floor-toggle-up {
+    order: -1;
+    margin-bottom: 1rem;
+  }
+
+  .cta-button {
+    width: 100%;
+  }
+
+  .controls-guide-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .floor-2-content {
+    gap: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-floor,
+  .floor-toggle-btn,
+  .cta-button,
+  .feature-card {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /* ─── Spectrum Viewer Layout ────────────────────────────────── */
