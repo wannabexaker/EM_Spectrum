@@ -5,7 +5,7 @@ import { useState } from 'react'
 import ShaderBackground from '@/components/ui/shader-background'
 
 export default function LandingPage() {
-  const [currentFloor, setCurrentFloor] = useState<1 | 2>(1)
+  const [currentFloor, setCurrentFloor] = useState<1 | 2 | 3>(1)
 
   return (
     <div className="landing-page" style={{ background: 'transparent' }}>
@@ -46,17 +46,27 @@ export default function LandingPage() {
           </section>
         )}
 
-        {/* Floor 2: Controls & Features */}
+        {/* Floor 2: Controls */}
         {currentFloor === 2 && (
-          <section className="landing-floor landing-floor-2" aria-label="Quick controls and highlights">
-            <button
-              className="floor-toggle-btn floor-toggle-up"
-              onClick={() => setCurrentFloor(1)}
-              aria-label="Return to introduction"
-              title="Back to introduction"
-            >
-              ↑
-            </button>
+          <section className="landing-floor landing-floor-2" aria-label="Quick controls">
+            <div className="floor-nav-row" role="group" aria-label="Floor navigation">
+              <button
+                className="floor-toggle-btn floor-toggle-up"
+                onClick={() => setCurrentFloor(1)}
+                aria-label="Return to introduction"
+                title="Back to introduction"
+              >
+                ↑
+              </button>
+              <button
+                className="floor-toggle-btn floor-toggle-down"
+                onClick={() => setCurrentFloor(3)}
+                aria-label="Show highlights"
+                title="Go to highlights"
+              >
+                ↓
+              </button>
+            </div>
 
             <div className="floor-2-content">
               <div className="controls-guide" aria-label="Spectrum controls quick reference">
@@ -96,7 +106,25 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </section>
+        )}
 
+        {/* Floor 3: Highlights */}
+        {currentFloor === 3 && (
+          <section className="landing-floor landing-floor-3" aria-label="Spectrum highlights">
+            <div className="floor-nav-row" role="group" aria-label="Floor navigation">
+              <button
+                className="floor-toggle-btn floor-toggle-up"
+                onClick={() => setCurrentFloor(2)}
+                aria-label="Return to controls"
+                title="Back to controls"
+              >
+                ↑
+              </button>
+            </div>
+
+            <div className="floor-3-content">
               <div className="feature-cards">
                 <div className="feature-card">
                   <div className="feature-card-icon">📡</div>

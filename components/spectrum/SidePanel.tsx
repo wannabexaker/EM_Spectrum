@@ -27,6 +27,7 @@ export function SidePanel() {
   const { selectedBand, isPanelOpen, closePanel } = useSidePanel()
   const activeMode = useSpectrumStore(s => s.activeMode)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [shareState, setShareState] = useState<'idle' | 'copied' | 'shared' | 'error'>('idle')
 
   useEffect(() => {
     setActiveTab('overview')
@@ -40,13 +41,31 @@ export function SidePanel() {
   const wlMax = formatWavelength(freqToWavelength(selectedBand.frequency_min))
   const catColor = CATEGORY_COLORS[selectedBand.category] ?? '#ffffff'
 
-  const copyDeepLink = () => {
+  const copyDeepLink = async () => {
     if (typeof window === 'undefined') return
     const center = Math.sqrt(selectedBand.frequency_min * selectedBand.frequency_max)
     const url = new URL(window.location.href)
     url.searchParams.set('f', center.toExponential(3))
     url.searchParams.set('z', '8')
-    navigator.clipboard.writeText(url.toString()).catch(() => {})
+    const shareUrl = url.toString()
+
+    try {
+      if (typeof navigator.share === 'function' && window.matchMedia('(pointer: coarse)').matches) {
+        await navigator.share({
+          title: `${selectedBand.label} band`,
+          text: `Explore ${selectedBand.label} on EM Spectrum`,
+          url: shareUrl,
+        })
+        setShareState('shared')
+      } else {
+        await navigator.clipboard.writeText(shareUrl)
+        setShareState('copied')
+      }
+    } catch {
+      setShareState('error')
+    }
+
+    window.setTimeout(() => setShareState('idle'), 1800)
   }
 
   const TABS: Tab[] = ['overview', 'applications', 'hazards', 'physics']
@@ -176,7 +195,10 @@ export function SidePanel() {
 
           <div className="panel-footer">
             <button className="panel-share-btn" onClick={copyDeepLink}>
-              Share this band
+              {shareState === 'idle' && 'Share this band'}
+              {shareState === 'copied' && 'Copied!'}
+              {shareState === 'shared' && 'Shared!'}
+              {shareState === 'error' && 'Share failed'}
             </button>
           </div>
         </motion.aside>
