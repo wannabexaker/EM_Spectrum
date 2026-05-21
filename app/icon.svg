@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="EM Spectrum">
+  <defs>
+    <linearGradient id="spectrum" x1="10" x2="54" y1="46" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7b6bff"/>
+      <stop offset="0.2" stop-color="#4cc9f0"/>
+      <stop offset="0.4" stop-color="#00d4ff"/>
+      <stop offset="0.58" stop-color="#00ff88"/>
+      <stop offset="0.78" stop-color="#ffd60a"/>
+      <stop offset="1" stop-color="#ff4d8d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="32" cy="30" r="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00d4ff" stop-opacity="0.28"/>
+      <stop offset="0.48" stop-color="#00d4ff" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#00d4ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="#02030a"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="12.5" fill="none" stroke="#74d6ff" stroke-opacity="0.18" stroke-width="3"/>
+  <circle cx="32" cy="30" r="27" fill="url(#glow)"/>
+
+  <path
+    d="M9 34c4.4-9.2 8.8-13.8 13.2-13.8 7.2 0 12.4 23.6 19.5 23.6 4.3 0 8.8-4.6 13.3-13.8"
+    fill="none"
+    stroke="#82f7ff"
+    stroke-width="4.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#softGlow)"
+  />
+  <path
+    d="M11 30c5.7 4.8 10.9 7.2 15.5 7.2 9.3 0 15.5-9.8 26.5-9.8"
+    fill="none"
+    stroke="#c77dff"
+    stroke-opacity="0.78"
+    stroke-width="2.2"
+    stroke-linecap="round"
+  />
+
+  <circle cx="32" cy="32" r="5.6" fill="#02030a" stroke="#82f7ff" stroke-width="3"/>
+  <circle cx="32" cy="32" r="2.2" fill="#82f7ff"/>
+
+  <rect x="11" y="49" width="42" height="4.2" rx="2.1" fill="url(#spectrum)"/>
+  <rect x="11" y="49" width="42" height="4.2" rx="2.1" fill="none" stroke="#ffffff" stroke-opacity="0.16"/>
+</svg>
