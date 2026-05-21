@@ -25,6 +25,7 @@ export const DEFAULT_DETAIL_LAYERS: SpectrumDetailLayers = {
 
 const LOCAL_STORAGE_KEYS = {
   favorites: 'em-spectrum:favorites:v1',
+  favoriteBands: 'em-spectrum:favorite-bands:v1',
   regulatoryRegion: 'em-spectrum:regulatory-region:v1',
   searchScope: 'em-spectrum:search-scope:v1',
   cursorFrequency: 'em-spectrum:cursor-frequency:v1',
@@ -97,6 +98,7 @@ interface SpectrumStore {
 
   // Local user preferences
   favoriteFeatureIds: string[]
+  favoriteBandIds: string[]
   regulatoryRegion: RegulatoryRegion
   searchScope: SearchScope
 
@@ -115,6 +117,7 @@ interface SpectrumStore {
   setDisplayUnit: (unit: 'frequency' | 'wavelength') => void
   toggleCursorFrequency: () => void
   toggleFavoriteFeature: (id: string) => void
+  toggleFavoriteBand: (id: string) => void
   setRegulatoryRegion: (region: RegulatoryRegion) => void
   setSearchScope: (scope: SearchScope) => void
 }
@@ -143,12 +146,14 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       probe: null,
       showCursorFrequency: true,
       favoriteFeatureIds: [],
+      favoriteBandIds: [],
       regulatoryRegion: 'all',
       searchScope: 'all',
 
       hydrateLocalPreferences: () =>
         set({
           favoriteFeatureIds: parseFavoriteIds(readLocalStorage(LOCAL_STORAGE_KEYS.favorites)),
+          favoriteBandIds: parseFavoriteIds(readLocalStorage(LOCAL_STORAGE_KEYS.favoriteBands)),
           regulatoryRegion: parseRegulatoryRegion(readLocalStorage(LOCAL_STORAGE_KEYS.regulatoryRegion)),
           searchScope: parseSearchScope(readLocalStorage(LOCAL_STORAGE_KEYS.searchScope)),
           showCursorFrequency: readLocalStorage(LOCAL_STORAGE_KEYS.cursorFrequency) === 'false' ? false : true,
@@ -209,6 +214,16 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
             : [...s.favoriteFeatureIds, id]
           writeLocalStorage(LOCAL_STORAGE_KEYS.favorites, JSON.stringify(favoriteFeatureIds))
           return { favoriteFeatureIds }
+        }),
+
+      toggleFavoriteBand: (id) =>
+        set((s) => {
+          const exists = s.favoriteBandIds.includes(id)
+          const favoriteBandIds = exists
+            ? s.favoriteBandIds.filter(item => item !== id)
+            : [...s.favoriteBandIds, id]
+          writeLocalStorage(LOCAL_STORAGE_KEYS.favoriteBands, JSON.stringify(favoriteBandIds))
+          return { favoriteBandIds }
         }),
 
       setRegulatoryRegion: (regulatoryRegion) => {

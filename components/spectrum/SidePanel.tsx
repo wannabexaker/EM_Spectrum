@@ -26,8 +26,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 export function SidePanel() {
   const { selectedBand, isPanelOpen, closePanel } = useSidePanel()
   const activeMode = useSpectrumStore(s => s.activeMode)
+  const favoriteBandIds = useSpectrumStore(s => s.favoriteBandIds)
+  const toggleFavoriteBand = useSpectrumStore(s => s.toggleFavoriteBand)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [shareState, setShareState] = useState<'idle' | 'copied' | 'shared' | 'error'>('idle')
+  const isFavorite = selectedBand ? favoriteBandIds.includes(selectedBand.id) : false
 
   useEffect(() => {
     setActiveTab('overview')
@@ -101,13 +104,24 @@ export function SidePanel() {
             >
               {selectedBand.category.toUpperCase()}
             </span>
-            <button
-              className="panel-close"
-              onClick={closePanel}
-              aria-label="Close panel"
-            >
-              ✕
-            </button>
+            <div className="panel-header-actions">
+              <button
+                className={`panel-favorite ${isFavorite ? 'active' : ''}`}
+                onClick={() => toggleFavoriteBand(selectedBand.id)}
+                aria-label={isFavorite ? 'Remove from saved' : 'Save this band'}
+                aria-pressed={isFavorite}
+                title={isFavorite ? 'Remove from saved' : 'Save this band'}
+              >
+                {isFavorite ? '★' : '☆'}
+              </button>
+              <button
+                className="panel-close"
+                onClick={closePanel}
+                aria-label="Close panel"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <h2 className="panel-title">{selectedBand.label}</h2>
