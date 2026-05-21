@@ -2,6 +2,8 @@ export type IonizationType = 'ionizing' | 'non-ionizing'
 export type LODLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 export type SpectrumMode = 'educational' | 'professional'
 export type SpectrumDetailDensity = 'clean' | 'details' | 'max'
+export type RegulatoryRegion = 'all' | 'eu' | 'us' | 'japan'
+export type SearchScope = 'all' | 'rf'
 export type ScientificConfidence =
   | 'Scientifically Verified'
   | 'Strong Evidence'
@@ -27,6 +29,17 @@ export interface FeatureRelation {
   note?: string
   weight?: number
   confidence?: ScientificConfidence
+}
+
+export interface FrequencyRegulatoryNote {
+  region: string
+  range?: string
+  limit: string
+  conditions?: string
+  source?: {
+    label: string
+    url?: string
+  }
 }
 
 export type UniversalVibrationCategory =
@@ -119,6 +132,7 @@ export interface FrequencyFeature {
   modeVisibility?: SpectrumMode | 'both'
   listPath?: string[]
   curatedRelations?: FeatureRelation[]
+  regulatory?: FrequencyRegulatoryNote[]
 }
 
 export interface FrequencyProbe {

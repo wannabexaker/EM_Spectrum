@@ -14,6 +14,17 @@ export interface SearchResult {
   data: SpectrumBand | FrequencyFeature | TechnologyOverlay | EducationalExample
 }
 
+export interface SearchOptions {
+  rfOnly?: boolean
+}
+
+interface FrequencyQueryCandidate {
+  frequency: number
+  label: string
+  priority: number
+  explicitUnit: boolean
+}
+
 let fuseIndex: Fuse<SpectrumBand> | null = null
 let featureFuseIndex: Fuse<FrequencyFeature> | null = null
 let educationalFuseIndex: Fuse<EducationalExample> | null = null
@@ -63,13 +74,12 @@ export function buildEducationalSearchIndex(): void {
   })
 }
 
-export function search(query: string, bands: SpectrumBand[]): SearchResult[] {
+export function search(query: string, bands: SpectrumBand[], options: SearchOptions = {}): SearchResult[] {
   if (!query.trim()) return []
 
-  const freqMatch = _parseFrequencyQuery(query)
-  if (freqMatch !== null) {
-    const band = _findBandContaining(freqMatch, bands)
-    return band ? [_frequencyResult(freqMatch, band)] : [_freeFrequencyResult(freqMatch, `Frequency ${query.trim()}`)]
+  const freqMatches = _parseFrequencyQueryCandidates(query)
+  if (freqMatches.length > 0) {
+    return _frequencyQueryResults(query.trim(), freqMatches, bands, options)
   }
 
   const periodFrequency = _parsePeriodQuery(query)
@@ -100,7 +110,12 @@ export function search(query: string, bands: SpectrumBand[]): SearchResult[] {
     data: item,
   }))
 
-  return [...featureResults, ...educationalResults, ...bandResults].slice(0, 14)
+  const allResults = [...featureResults, ...educationalResults, ...bandResults]
+  const visibleResults = options.rfOnly
+    ? allResults.filter(result => result.type === 'band' || result.type === 'technology')
+    : allResults
+
+  return visibleResults.slice(0, 14)
 }
 
 export function searchBands(query: string, bands: SpectrumBand[]): SpectrumBand[] {
@@ -109,7 +124,7 @@ export function searchBands(query: string, bands: SpectrumBand[]): SpectrumBand[
     .map(r => r.data as SpectrumBand)
 }
 
-function _parseFrequencyQuery(q: string): number | null {
+function _parseFrequencyQueryCandidates(q: string): FrequencyQueryCandidate[] {
   const clean = q.trim().toLowerCase().replace(/\s+/g, '')
   const multipliers: Record<string, number> = {
     hz: 1, khz: 1e3, mhz: 1e6, ghz: 1e9, thz: 1e12,
@@ -117,11 +132,61 @@ function _parseFrequencyQuery(q: string): number | null {
     bpm: 1 / 60, rpm: 1 / 60,
   }
   const m = clean.match(/^([\d.e+\-]+)(hz|khz|mhz|ghz|thz|phz|ehz|zhz|yhz|bpm|rpm)?$/)
-  if (!m) return null
+  if (!m) return []
   const val = parseFloat(m[1] ?? '')
-  const unit = m[2] ?? 'hz'
-  const mult = multipliers[unit] ?? 1
-  return Number.isFinite(val) ? Math.max(val * mult, F_MIN) : null
+  if (!Number.isFinite(val)) return []
+  const hasDecimalOrExponent = /[.e]/i.test(m[1] ?? '')
+
+  const explicitUnit = Boolean(m[2])
+  if (explicitUnit) {
+    const unit = m[2] ?? 'hz'
+    const mult = multipliers[unit] ?? 1
+    return [{
+      frequency: Math.max(val * mult, F_MIN),
+      label: `${val} ${unit.toUpperCase()}`,
+      priority: 0,
+      explicitUnit: true,
+    }]
+  }
+
+  const candidates: FrequencyQueryCandidate[] = []
+  const addCandidate = (frequency: number, label: string, priority: number) => {
+    if (!Number.isFinite(frequency) || frequency <= 0) return
+    if (candidates.some(item => Math.abs(Math.log10(item.frequency) - Math.log10(frequency)) < 1e-9)) return
+    candidates.push({
+      frequency: Math.max(frequency, F_MIN),
+      label,
+      priority,
+      explicitUnit: false,
+    })
+  }
+
+  if (val >= 300 && val <= 999_999) {
+    addCandidate(val * 1e6, `${val} MHz`, 0)
+    addCandidate(val, `${val} Hz`, 3)
+  } else if (val >= 10 && val < 300) {
+    if (hasDecimalOrExponent) {
+      addCandidate(val * 1e6, `${val} MHz`, 0)
+      addCandidate(val, `${val} Hz`, 2)
+    } else {
+      addCandidate(val, `${val} Hz`, 0)
+      addCandidate(val * 1e6, `${val} MHz`, 1)
+    }
+  } else if (val > 0 && val < 10) {
+    if (hasDecimalOrExponent) {
+      addCandidate(val * 1e9, `${val} GHz`, 0)
+      addCandidate(val * 1e6, `${val} MHz`, 1)
+      addCandidate(val, `${val} Hz`, 3)
+    } else {
+      addCandidate(val, `${val} Hz`, 0)
+      addCandidate(val * 1e9, `${val} GHz`, 1)
+      addCandidate(val * 1e6, `${val} MHz`, 2)
+    }
+  } else {
+    addCandidate(val, `${val} Hz`, 0)
+  }
+
+  return candidates
 }
 
 function _parsePeriodQuery(q: string): number | null {
@@ -154,6 +219,78 @@ function _parseWavelengthQuery(q: string): number | null {
   const unit = m[2] ?? 'm'
   const mult = multipliers[unit] ?? 1
   return Number.isFinite(val) ? val * mult : null
+}
+
+function _frequencyQueryResults(query: string, candidates: FrequencyQueryCandidate[], bands: SpectrumBand[], options: SearchOptions): SearchResult[] {
+  const rawFeatureMatches = candidates
+    .flatMap(candidate => _findFeatureMatches(candidate.frequency).map(match => ({ ...match, candidate })))
+
+  const bestMatchedPriority = rawFeatureMatches.length > 0
+    ? Math.min(...rawFeatureMatches.map(match => match.candidate.priority))
+    : 0
+  const priorityMatches = rawFeatureMatches.filter(match => match.candidate.priority === bestMatchedPriority)
+
+  const exactCandidateFrequencies = new Set(
+    priorityMatches
+      .filter(match => match.score < 0.001)
+      .map(match => match.candidate.frequency)
+  )
+
+  const featureMatches = (exactCandidateFrequencies.size > 0
+    ? priorityMatches.filter(match => exactCandidateFrequencies.has(match.candidate.frequency))
+    : priorityMatches
+  )
+    .sort((a, b) => {
+      const aExact = a.score < 0.001 ? 0 : 1
+      const bExact = b.score < 0.001 ? 0 : 1
+      if (aExact !== bExact) return aExact - bExact
+      if (a.candidate.priority !== b.candidate.priority) return a.candidate.priority - b.candidate.priority
+      if (Boolean(a.feature.atlasCategory) !== Boolean(b.feature.atlasCategory)) {
+        return a.feature.atlasCategory ? 1 : -1
+      }
+      if (a.score !== b.score) return a.score - b.score
+      return a.feature.frequency_bandwidth - b.feature.frequency_bandwidth
+    })
+
+  const results: SearchResult[] = []
+  const seen = new Set<string>()
+
+  for (const match of featureMatches) {
+    if (seen.has(match.feature.id)) continue
+    seen.add(match.feature.id)
+    if (!options.rfOnly || !match.feature.atlasCategory) {
+      results.push(_featureResult(match.feature))
+    }
+  }
+
+  const bestCandidate = featureMatches[0]?.candidate ?? candidates[0]
+  if (bestCandidate) {
+    const band = _findBandContaining(bestCandidate.frequency, bands)
+    const frequencyResult = band
+      ? _frequencyResult(bestCandidate.frequency, band)
+      : _freeFrequencyResult(bestCandidate.frequency, `Frequency ${query}`)
+
+    results.push(frequencyResult)
+  }
+
+  return results.slice(0, 14)
+}
+
+function _findFeatureMatches(freq: number): Array<{ feature: FrequencyFeature; score: number }> {
+  return frequencyFeatures
+    .map(feature => {
+      const half = Math.max(feature.frequency_bandwidth / 2, feature.frequency_center * 1e-9, F_MIN)
+      const min = Math.max(F_MIN, feature.frequency_center - half)
+      const max = Math.max(min, feature.frequency_center + half)
+
+      if (freq < min || freq > max) return null
+
+      return {
+        feature,
+        score: Math.abs(freq - feature.frequency_center) / half,
+      }
+    })
+    .filter((item): item is { feature: FrequencyFeature; score: number } => item !== null)
 }
 
 function _findBandContaining(freq: number, bands: SpectrumBand[]): SpectrumBand | null {

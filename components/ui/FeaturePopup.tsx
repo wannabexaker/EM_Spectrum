@@ -4,7 +4,8 @@ import { useEffect, useRef } from 'react'
 import { ATLAS_CATEGORY_LABELS } from '@/data/universalVibrationsAtlas'
 import { F_MIN, formatFrequency } from '@/lib/zoom/logMapper'
 import { findRelatedFeatures, formatRelationshipReason } from '@/lib/spectrum/featureRelationships'
-import type { FrequencyFeature } from '@/types/spectrum'
+import { useSpectrumStore } from '@/store/spectrumStore'
+import type { FrequencyFeature, FrequencyRegulatoryNote, RegulatoryRegion } from '@/types/spectrum'
 
 interface Props {
   feature: FrequencyFeature
@@ -16,8 +17,28 @@ interface Props {
   onNavigate?: (feature: FrequencyFeature) => void
 }
 
+const REGION_LABELS: Record<RegulatoryRegion, string> = {
+  all: 'All',
+  eu: 'EU',
+  us: 'US',
+  japan: 'Japan',
+}
+
+function noteMatchesRegion(note: FrequencyRegulatoryNote, region: RegulatoryRegion): boolean {
+  if (region === 'all') return true
+
+  const value = note.region.toLowerCase()
+  if (region === 'eu') return value.includes('eu') || value.includes('cept') || value.includes('etsi')
+  if (region === 'us') return value.includes('us') || value.includes('fcc')
+  return value.includes('japan')
+}
+
 export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavigate }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  const regulatoryRegion = useSpectrumStore(s => s.regulatoryRegion)
+  const favoriteFeatureIds = useSpectrumStore(s => s.favoriteFeatureIds)
+  const toggleFavoriteFeature = useSpectrumStore(s => s.toggleFavoriteFeature)
+  const isFavorite = favoriteFeatureIds.includes(feature.id)
 
   useEffect(() => {
     let frame: number
@@ -53,6 +74,8 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
   const periodSeconds = feature.periodSeconds ?? (feature.frequency_center > 0 ? 1 / feature.frequency_center : undefined)
   const atlasLabel = feature.atlasCategory ? ATLAS_CATEGORY_LABELS[feature.atlasCategory] : null
   const related = findRelatedFeatures(feature, 6)
+  const regulatoryNotes = feature.regulatory ?? []
+  const visibleRegulatoryNotes = regulatoryNotes.filter(note => noteMatchesRegion(note, regulatoryRegion))
 
   return (
     <div
@@ -62,6 +85,15 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
       role="dialog"
       aria-label={feature.label}
     >
+      <button
+        className={`feature-popup-favorite ${isFavorite ? 'active' : ''}`}
+        onClick={() => toggleFavoriteFeature(feature.id)}
+        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        aria-pressed={isFavorite}
+        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        {isFavorite ? '★' : '☆'}
+      </button>
       <button className="feature-popup-close" onClick={onClose} aria-label="Close">x</button>
 
       <div className="feature-popup-dot" style={{ background: feature.color }} />
@@ -96,6 +128,35 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
       )}
 
       <p className="feature-popup-detail">{feature.detail}</p>
+
+      {regulatoryNotes.length > 0 && (
+        <div className="feature-popup-regulatory">
+          <span className="feature-popup-regulatory-label">
+            Legal limits · {REGION_LABELS[regulatoryRegion]}
+          </span>
+          {visibleRegulatoryNotes.length > 0 ? (
+            visibleRegulatoryNotes.slice(0, 4).map(note => (
+              <div key={`${note.region}-${note.range ?? note.limit}`} className="feature-reg-note">
+                <strong>{note.region}</strong>
+                {note.range && <span>{note.range}</span>}
+                <em>{note.limit}</em>
+                {note.conditions && <small>{note.conditions}</small>}
+                {note.source?.url ? (
+                  <a href={note.source.url} target="_blank" rel="noreferrer">
+                    {note.source.label}
+                  </a>
+                ) : note.source?.label ? (
+                  <small>{note.source.label}</small>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <div className="feature-reg-empty">
+              No {REGION_LABELS[regulatoryRegion]} legal note available for this card yet.
+            </div>
+          )}
+        </div>
+      )}
 
       {feature.sources && feature.sources.length > 0 && (
         <div className="feature-popup-sources">

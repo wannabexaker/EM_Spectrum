@@ -8,7 +8,7 @@ import { classifyFeature, disabledDetailLayersForFeature, DETAIL_LAYER_LABELS } 
 import { ATLAS_CATEGORY_LABELS } from '@/data/universalVibrationsAtlas'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { findRelatedFeatures } from '@/lib/spectrum/featureRelationships'
-import type { FrequencyFeature, SpectrumBand, SpectrumDetailDensity, SpectrumDetailLayerKey } from '@/types/spectrum'
+import type { FrequencyFeature, SearchScope, SpectrumBand, SpectrumDetailDensity, SpectrumDetailLayerKey } from '@/types/spectrum'
 
 interface SearchBarProps {
   onBandSelect?: (band: SpectrumBand) => void
@@ -55,6 +55,22 @@ const EMPTY_SIGNAL_COUNTS: Record<SignalClassFacet, number> = {
 
 const FEATURE_BY_ID = new Map(frequencyFeatures.map(feature => [feature.id, feature]))
 
+const SEARCH_SCOPE_OPTIONS: Array<{ value: SearchScope; label: string; title: string }> = [
+  { value: 'all', label: 'All results', title: 'Search the full atlas, education examples, bands and technologies' },
+  { value: 'rf', label: 'RF only', title: 'Limit results to EM bands and technology/channel features' },
+]
+
+function buildFeatureSearchResult(feature: FrequencyFeature, context: string): SearchResult {
+  return {
+    type: feature.atlasCategory ? 'atlas' : 'technology',
+    label: feature.label,
+    sublabel: `${context} - ${feature.family}`,
+    targetFrequency: feature.frequency_center,
+    targetZoom: Math.max(8, feature.minZoom * 1.15),
+    data: feature,
+  }
+}
+
 function buildRelatedSearchResults(base: FrequencyFeature): SearchResult[] {
   return findRelatedFeatures(base, 7).map(rel => ({
     type: rel.feature.atlasCategory ? 'atlas' : 'technology',
@@ -66,36 +82,108 @@ function buildRelatedSearchResults(base: FrequencyFeature): SearchResult[] {
   }))
 }
 
-function getDensityPriority(result: SearchResult, density: SpectrumDetailDensity): number {
-  if (density === 'max') return 0
-
-  if (result.type === 'band') {
-    return density === 'clean' ? 140 : 35
-  }
-
-  if (result.type === 'educational') {
-    return density === 'clean' ? 70 : 18
-  }
-
-  const feature = result.data as FrequencyFeature
-  let score = density === 'clean' ? 40 : 8
-
-  if (feature.curatedRelations?.length) score += density === 'clean' ? 50 : 24
-  if (feature.minZoom <= 4) score += density === 'clean' ? 16 : 8
-
-  if (feature.confidence === 'Scientifically Verified') score += density === 'clean' ? 30 : 10
-  else if (feature.confidence === 'Strong Evidence') score += density === 'clean' ? 20 : 7
-
-  return score
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9.+-]+/g, ' ').trim()
 }
 
-function sortResultsByDensity(results: SearchResult[], density: SpectrumDetailDensity): SearchResult[] {
-  if (density === 'max') return results
+function isNumericSearchQuery(query: string): boolean {
+  return /^[\d.,e+\-\s]+(?:hz|khz|mhz|ghz|thz|m|cm|mm|um|nm|pm|fm|bpm|rpm)?$/i.test(query.trim())
+}
+
+function resultId(result: SearchResult): string {
+  return String(result.data.id)
+}
+
+function resultTextPriority(result: SearchResult, query: string): number {
+  const q = normalizeSearchText(query)
+  if (!q) return 0
+
+  const label = normalizeSearchText(result.label)
+  const sublabel = normalizeSearchText(result.sublabel)
+  const texts = [label, sublabel]
+
+  if (result.type !== 'band' && result.type !== 'educational') {
+    const feature = result.data as FrequencyFeature
+    texts.push(
+      normalizeSearchText(feature.shortLabel),
+      normalizeSearchText(feature.family),
+      normalizeSearchText(feature.detail),
+      ...(feature.aliases ?? []).map(normalizeSearchText),
+      ...(feature.modulationTypes ?? []).map(normalizeSearchText),
+      ...(feature.listPath ?? []).map(normalizeSearchText)
+    )
+  } else if (result.type === 'band') {
+    const band = result.data as SpectrumBand
+    texts.push(
+      normalizeSearchText(band.subcategory),
+      normalizeSearchText(band.description),
+      ...band.applications.map(normalizeSearchText)
+    )
+  }
+
+  if (texts.some(text => text === q)) return 0
+  if (texts.some(text => text.startsWith(q))) return 8
+  if (texts.some(text => text.includes(q))) return 18
+
+  const tokens = q.split(' ').filter(Boolean)
+  if (tokens.length > 1 && texts.some(text => tokens.every(token => text.includes(token)))) return 28
+
+  return 44
+}
+
+function resultTypePriority(result: SearchResult, numericQuery: boolean, searchScope: SearchScope): number {
+  if (numericQuery) {
+    if (result.type === 'technology') return 0
+    if (result.type === 'band') return 18
+    if (result.type === 'educational') return 46
+    return searchScope === 'rf' ? 80 : 38
+  }
+
+  if (result.type === 'technology') return 0
+  if (result.type === 'band') return searchScope === 'rf' ? 10 : 18
+  if (result.type === 'educational') return 24
+  return 30
+}
+
+function densityTieBreak(result: SearchResult, density: SpectrumDetailDensity): number {
+  if (density === 'max') return 0
+  if (result.type === 'band') return density === 'clean' ? 8 : 4
+  if (result.type === 'educational') return density === 'clean' ? 12 : 6
+  const feature = result.data as FrequencyFeature
+  if (feature.curatedRelations?.length) return -5
+  if (feature.confidence === 'Scientifically Verified') return -3
+  if (feature.confidence === 'Strong Evidence') return -2
+  return 0
+}
+
+function sortResultsByPriority(
+  results: SearchResult[],
+  context: {
+    query: string
+    density: SpectrumDetailDensity
+    favoriteIds: Set<string>
+    relatedIds: Set<string>
+    searchScope: SearchScope
+  }
+): SearchResult[] {
+  const numericQuery = isNumericSearchQuery(context.query)
 
   return results
-    .map((result, index) => ({ result, index, score: getDensityPriority(result, density) }))
+    .map((result, index) => {
+      const id = resultId(result)
+      const pinnedScore =
+        (context.favoriteIds.has(id) ? -140 : 0) +
+        (context.relatedIds.has(id) ? -110 : 0)
+
+      const score = pinnedScore +
+        resultTypePriority(result, numericQuery, context.searchScope) +
+        resultTextPriority(result, context.query) +
+        densityTieBreak(result, context.density)
+
+      return { result, index, score }
+    })
     .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score
+      if (a.score !== b.score) return a.score - b.score
       return a.index - b.index
     })
     .map(item => item.result)
@@ -117,6 +205,10 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   const setDetailDensity = useSpectrumStore(s => s.setDetailDensity)
   const detailDensity = useSpectrumStore(s => s.detailDensity)
   const selectedFeatureId = useSpectrumStore(s => s.selectedFeatureId)
+  const setSelectedFeature = useSpectrumStore(s => s.setSelectedFeature)
+  const favoriteFeatureIds = useSpectrumStore(s => s.favoriteFeatureIds)
+  const searchScope = useSpectrumStore(s => s.searchScope)
+  const setSearchScope = useSpectrumStore(s => s.setSearchScope)
   const showEM = useSpectrumStore(s => s.showEM)
   const showSound = useSpectrumStore(s => s.showSound)
   const showApplications = useSpectrumStore(s => s.showApplications)
@@ -134,6 +226,17 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   const relatedIds = useMemo(
     () => new Set(relatedBaseResults.map(item => item.data.id)),
     [relatedBaseResults]
+  )
+  const favoriteResults = useMemo(
+    () => favoriteFeatureIds
+      .map(id => FEATURE_BY_ID.get(id))
+      .filter((feature): feature is FrequencyFeature => Boolean(feature))
+      .map(feature => buildFeatureSearchResult(feature, 'Favorite')),
+    [favoriteFeatureIds]
+  )
+  const favoriteIds = useMemo(
+    () => new Set(favoriteResults.map(item => item.data.id)),
+    [favoriteResults]
   )
   const relatedResultIndices = useMemo(() => {
     const indices: number[] = []
@@ -232,18 +335,17 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
     }
 
     if (!query.trim()) {
-      const source = selectedFeature ? relatedBaseResults : []
+      const emptySearchResults = selectedFeature ? relatedBaseResults : favoriteResults
+      const source = searchScope === 'rf'
+        ? emptySearchResults.filter(result => result.type === 'band' || result.type === 'technology')
+        : emptySearchResults
       updateFacetCounts(source)
-      if (selectedFeature) {
-        setResults(relatedBaseResults)
-      } else {
-        setResults([])
-      }
+      setResults(source)
       setActiveIdx(0)
       return
     }
 
-    const baseResults = search(query, allBands)
+    const baseResults = search(query, allBands, { rfOnly: searchScope === 'rf' })
 
     let merged = baseResults
     if (selectedFeature && relatedBaseResults.length > 0) {
@@ -276,9 +378,15 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
           return modulationSignalClass(feature.modulationTypes) === signalClassFacet
         })
 
-    setResults(sortResultsByDensity(filtered, detailDensity))
+    setResults(sortResultsByPriority(filtered, {
+      query,
+      density: detailDensity,
+      favoriteIds,
+      relatedIds,
+      searchScope,
+    }))
     setActiveIdx(0)
-  }, [query, allBands, detailDensity, selectedFeature, relatedBaseResults, modulationFacet, signalClassFacet, updateFacetCounts])
+  }, [query, allBands, detailDensity, selectedFeature, relatedBaseResults, favoriteResults, favoriteIds, relatedIds, modulationFacet, signalClassFacet, searchScope, updateFacetCounts])
 
   const handleSelect = useCallback(
     (result: SearchResult) => {
@@ -298,16 +406,18 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
           toggleDetailLayer(layer)
         }
         setDetailDensity('details')
+        setSelectedFeature(feature.id)
         selectBand(null)
       }
       setQuery('')
       setOpen(false)
     },
-    [setZoom, selectBand, setDetailDensity, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect]
+    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect]
   )
 
   const getResultGroup = (result: SearchResult) => {
     if (relatedIds.has(result.data.id)) return 'Related to current'
+    if (favoriteIds.has(result.data.id)) return 'Favorites'
 
     if (result.type === 'band') return 'Bands'
     if (result.type === 'educational') return 'Educational Stories'
@@ -417,6 +527,26 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
 
       {open && (
         <>
+          <div className="search-facets search-scope-facets" role="toolbar" aria-label="Search scope">
+            {SEARCH_SCOPE_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                className={`search-facet-btn ${searchScope === option.value ? 'active' : ''}`}
+                onClick={() => setSearchScope(option.value)}
+                aria-pressed={searchScope === option.value}
+                title={option.title}
+              >
+                {option.label}
+              </button>
+            ))}
+            {favoriteResults.length > 0 && !query.trim() && (
+              <span className="search-favorites-hint">
+                {favoriteResults.length} saved
+              </span>
+            )}
+          </div>
+
           <div className="search-facets" role="toolbar" aria-label="Signal class filters">
             {SIGNAL_CLASS_FACETS.map(facet => (
               <button
@@ -467,7 +597,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         <ul className="search-dropdown" role="listbox">
           {groupedResults.map(group => (
             <li key={group.group} className="search-group">
-              <span className={`search-group-title ${group.group === 'Related to current' ? 'is-related' : ''}`}>
+              <span className={`search-group-title ${group.group === 'Related to current' ? 'is-related' : ''} ${group.group === 'Favorites' ? 'is-favorite' : ''}`}>
                 {group.group}
               </span>
               <ul>

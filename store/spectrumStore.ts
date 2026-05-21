@@ -4,6 +4,8 @@ import { devtools } from 'zustand/middleware'
 import { getDetailDensityLayerPreset } from '@/lib/spectrum/detailDensityProfiles'
 import type {
   FrequencyProbe,
+  RegulatoryRegion,
+  SearchScope,
   SpectrumBand,
   SpectrumCategory,
   SpectrumDetailDensity,
@@ -19,6 +21,50 @@ export const DEFAULT_DETAIL_LAYERS: SpectrumDetailLayers = {
   regulations: true,
   hazards: true,
   natural: true,
+}
+
+const LOCAL_STORAGE_KEYS = {
+  favorites: 'em-spectrum:favorites:v1',
+  regulatoryRegion: 'em-spectrum:regulatory-region:v1',
+  searchScope: 'em-spectrum:search-scope:v1',
+  cursorFrequency: 'em-spectrum:cursor-frequency:v1',
+} as const
+
+function readLocalStorage(key: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeLocalStorage(key: string, value: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Ignore storage failures in privacy mode or restricted environments.
+  }
+}
+
+function parseFavoriteIds(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return [...new Set(parsed.filter((item): item is string => typeof item === 'string' && item.length > 0))]
+  } catch {
+    return []
+  }
+}
+
+function parseRegulatoryRegion(raw: string | null): RegulatoryRegion {
+  return raw === 'eu' || raw === 'us' || raw === 'japan' ? raw : 'all'
+}
+
+function parseSearchScope(raw: string | null): SearchScope {
+  return raw === 'rf' ? 'rf' : 'all'
 }
 
 interface SpectrumStore {
@@ -47,8 +93,15 @@ interface SpectrumStore {
 
   // Live cursor probe
   probe: FrequencyProbe | null
+  showCursorFrequency: boolean
+
+  // Local user preferences
+  favoriteFeatureIds: string[]
+  regulatoryRegion: RegulatoryRegion
+  searchScope: SearchScope
 
   // Actions
+  hydrateLocalPreferences: () => void
   setZoom: (center: number, zoom: number) => void
   setProbe: (probe: FrequencyProbe | null) => void
   selectBand: (band: SpectrumBand | null) => void
@@ -60,6 +113,10 @@ interface SpectrumStore {
   setMode: (mode: SpectrumMode) => void
   setDetailDensity: (density: SpectrumDetailDensity) => void
   setDisplayUnit: (unit: 'frequency' | 'wavelength') => void
+  toggleCursorFrequency: () => void
+  toggleFavoriteFeature: (id: string) => void
+  setRegulatoryRegion: (region: RegulatoryRegion) => void
+  setSearchScope: (scope: SearchScope) => void
 }
 
 // createStore (vanilla) — gives us getInitialState() which useStore passes as
@@ -84,6 +141,18 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       showHazards: true,
       displayUnit: 'frequency',
       probe: null,
+      showCursorFrequency: true,
+      favoriteFeatureIds: [],
+      regulatoryRegion: 'all',
+      searchScope: 'all',
+
+      hydrateLocalPreferences: () =>
+        set({
+          favoriteFeatureIds: parseFavoriteIds(readLocalStorage(LOCAL_STORAGE_KEYS.favorites)),
+          regulatoryRegion: parseRegulatoryRegion(readLocalStorage(LOCAL_STORAGE_KEYS.regulatoryRegion)),
+          searchScope: parseSearchScope(readLocalStorage(LOCAL_STORAGE_KEYS.searchScope)),
+          showCursorFrequency: readLocalStorage(LOCAL_STORAGE_KEYS.cursorFrequency) === 'false' ? false : true,
+        }),
 
       setZoom: (centerFrequency, zoomLevel) =>
         set({ centerFrequency, zoomLevel }),
@@ -125,6 +194,32 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
         })),
 
       setDisplayUnit: (unit) => set({ displayUnit: unit }),
+      toggleCursorFrequency: () =>
+        set((s) => {
+          const next = !s.showCursorFrequency
+          writeLocalStorage(LOCAL_STORAGE_KEYS.cursorFrequency, String(next))
+          return { showCursorFrequency: next }
+        }),
+
+      toggleFavoriteFeature: (id) =>
+        set((s) => {
+          const exists = s.favoriteFeatureIds.includes(id)
+          const favoriteFeatureIds = exists
+            ? s.favoriteFeatureIds.filter(item => item !== id)
+            : [...s.favoriteFeatureIds, id]
+          writeLocalStorage(LOCAL_STORAGE_KEYS.favorites, JSON.stringify(favoriteFeatureIds))
+          return { favoriteFeatureIds }
+        }),
+
+      setRegulatoryRegion: (regulatoryRegion) => {
+        writeLocalStorage(LOCAL_STORAGE_KEYS.regulatoryRegion, regulatoryRegion)
+        set({ regulatoryRegion })
+      },
+
+      setSearchScope: (searchScope) => {
+        writeLocalStorage(LOCAL_STORAGE_KEYS.searchScope, searchScope)
+        set({ searchScope })
+      },
     }),
     {
       name: 'spectrum-store',

@@ -11,11 +11,16 @@ import { LayerToggle } from '@/components/ui/LayerToggle'
 import { ModeToggle } from '@/components/ui/ModeToggle'
 import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
+import { RegulatoryRegionToggle } from '@/components/ui/RegulatoryRegionToggle'
 import { FrequencyHUD } from '@/components/ui/FrequencyHUD'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { decodeDetailDensityPreference, decodeViewportState } from '@/lib/deeplink/urlState'
 
 export default function SpectrumPage() {
+  useEffect(() => {
+    useSpectrumStore.getState().hydrateLocalPreferences()
+  }, [])
+
   // Phase 17 — initialize zoom from URL on mount (getState avoids subscribing)
   useEffect(() => {
     const saved = decodeViewportState()
@@ -53,6 +58,7 @@ export default function SpectrumPage() {
           <div className="header-sep" aria-hidden />
           <ModeToggle />
           <UnitSwitcher />
+          <RegulatoryRegionToggle />
         </nav>
       </header>
 

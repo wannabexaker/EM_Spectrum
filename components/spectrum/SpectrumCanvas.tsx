@@ -9,7 +9,7 @@ import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
-import { F_MIN, LOG_RANGE, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
+import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
 import { getBandLane, getFeatureLane, SPECTRUM_LANES, SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { getFeatureZoomBoostForDensity, isFeatureInDensityScope } from '@/lib/spectrum/detailDensityProfiles'
@@ -149,6 +149,8 @@ export function SpectrumCanvas() {
   const showApplications = useSpectrumStore(s => s.showApplications)
   const showHazards = useSpectrumStore(s => s.showHazards)
   const detailLayers = useSpectrumStore(s => s.detailLayers)
+  const displayUnit = useSpectrumStore(s => s.displayUnit)
+  const showCursorFrequency = useSpectrumStore(s => s.showCursorFrequency)
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
   const pointerMovedRef = useRef(false)
 
@@ -710,6 +712,18 @@ export function SpectrumCanvas() {
           <div className="reticle-v" />
           <div className="reticle-ring" />
           <div className="reticle-dot" />
+        </div>
+      )}
+
+      {isReady && reticle && probe && showCursorFrequency && (
+        <div
+          className="cursor-frequency-tag"
+          style={{ '--px': `${reticle.x}px`, '--py': `${reticle.y}px` } as React.CSSProperties}
+          aria-hidden="true"
+        >
+          {displayUnit === 'frequency'
+            ? formatFrequency(probe.frequency)
+            : formatWavelength(probe.wavelength)}
         </div>
       )}
 

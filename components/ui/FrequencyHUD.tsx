@@ -1,12 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
+import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
 import { formatFrequency, formatWavelength, freqToWavelength, MIN_ZOOM, MAX_ZOOM } from '@/lib/zoom/logMapper'
 import { getLODLevel } from '@/lib/zoom/lodController'
 import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
+import type { FrequencyFeature } from '@/types/spectrum'
 const ZOOM_PRESETS = [1, 2, 3, 5, 10]
+const FEATURE_BY_ID = new Map(frequencyFeatures.map(feature => [feature.id, feature]))
 
 function formatZoom(z: number): string {
   if (z >= 10) return z.toFixed(1)
@@ -20,12 +23,20 @@ export function FrequencyHUD() {
   const setZoom = useSpectrumStore(s => s.setZoom)
   const probe = useSpectrumStore(s => s.probe)
   const activeMode = useSpectrumStore(s => s.activeMode)
+  const showCursorFrequency = useSpectrumStore(s => s.showCursorFrequency)
+  const toggleCursorFrequency = useSpectrumStore(s => s.toggleCursorFrequency)
+  const favoriteFeatureIds = useSpectrumStore(s => s.favoriteFeatureIds)
+  const toggleFavoriteFeature = useSpectrumStore(s => s.toggleFavoriteFeature)
+  const setSelectedFeature = useSpectrumStore(s => s.setSelectedFeature)
+  const selectBand = useSpectrumStore(s => s.selectBand)
   const zoomAnimation = useRef<number | null>(null)
 
   // Zoom input state
   const [editingZoom, setEditingZoom] = useState(false)
   const [zoomInput, setZoomInput] = useState('')
+  const [savedOpen, setSavedOpen] = useState(false)
   const zoomInputRef = useRef<HTMLInputElement>(null)
+  const savedPanelRef = useRef<HTMLDivElement>(null)
 
   const readoutFrequency = probe?.frequency ?? centerFrequency
   const wavelength = probe?.wavelength ?? freqToWavelength(centerFrequency)
@@ -41,6 +52,12 @@ export function FrequencyHUD() {
   const professionalBand = activeMode === 'professional' ? findProfessionalBand(readoutFrequency) : null
   const professionalLane = professionalBand ? SPECTRUM_LANE_BY_ID[professionalBand.category] : null
   const nearbyTechnology = activeMode === 'professional' ? findNearestTechnology(readoutFrequency) : null
+  const favoriteFeatures = useMemo(
+    () => favoriteFeatureIds
+      .map(id => FEATURE_BY_ID.get(id))
+      .filter((feature): feature is FrequencyFeature => Boolean(feature)),
+    [favoriteFeatureIds]
+  )
 
   const animateToZoom = useCallback((targetZoom: number) => {
     if (zoomAnimation.current !== null) cancelAnimationFrame(zoomAnimation.current)
@@ -65,6 +82,14 @@ export function FrequencyHUD() {
     setEditingZoom(true)
   }, [zoomLevel])
 
+  const navigateToFavorite = useCallback((feature: FrequencyFeature) => {
+    const targetZoom = Math.max(8, Math.min(MAX_ZOOM, feature.minZoom * 1.25))
+    setZoom(feature.frequency_center, targetZoom)
+    setSelectedFeature(feature.id)
+    selectBand(null)
+    setSavedOpen(false)
+  }, [selectBand, setSelectedFeature, setZoom])
+
   // Focus + select all when input appears
   useEffect(() => {
     if (editingZoom && zoomInputRef.current) {
@@ -72,6 +97,23 @@ export function FrequencyHUD() {
       zoomInputRef.current.select()
     }
   }, [editingZoom])
+
+  useEffect(() => {
+    if (!savedOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (savedPanelRef.current?.contains(e.target as Node)) return
+      setSavedOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSavedOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [savedOpen])
 
   const applyZoomInput = useCallback(() => {
     const raw = zoomInput.trim().replace(',', '.')
@@ -170,6 +212,67 @@ export function FrequencyHUD() {
               {level}
             </button>
           ))}
+        </div>
+        <button
+          className={`hud-cursor-toggle ${showCursorFrequency ? 'active' : ''}`}
+          onClick={toggleCursorFrequency}
+          title="Show frequency next to cursor"
+          aria-label="Toggle cursor frequency label"
+          aria-pressed={showCursorFrequency}
+        >
+          cursor Hz
+        </button>
+        <div className="hud-saved-wrap" ref={savedPanelRef}>
+          <button
+            className={`hud-saved-toggle ${savedOpen ? 'active' : ''}`}
+            onClick={() => setSavedOpen(open => !open)}
+            title="Show saved frequencies"
+            aria-label="Show saved frequencies"
+            aria-expanded={savedOpen}
+          >
+            Saved
+            {favoriteFeatures.length > 0 && (
+              <span className="hud-saved-count">{favoriteFeatures.length}</span>
+            )}
+          </button>
+
+          {savedOpen && (
+            <div className="hud-saved-panel" role="dialog" aria-label="Saved frequencies">
+              <div className="hud-saved-panel-head">
+                <strong>Saved</strong>
+                <span>{favoriteFeatures.length}</span>
+              </div>
+
+              {favoriteFeatures.length > 0 ? (
+                <ul className="hud-saved-list">
+                  {favoriteFeatures.map(feature => (
+                    <li key={feature.id} className="hud-saved-item">
+                      <button
+                        className="hud-saved-link"
+                        onClick={() => navigateToFavorite(feature)}
+                        title={`Go to ${feature.label}`}
+                      >
+                        <strong>{feature.shortLabel}</strong>
+                        <span>{formatFrequency(feature.frequency_center)}</span>
+                      </button>
+                      <button
+                        className="hud-saved-remove"
+                        onClick={() => toggleFavoriteFeature(feature.id)}
+                        aria-label={`Remove ${feature.label} from saved`}
+                        title="Remove saved frequency"
+                      >
+                        x
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="hud-saved-empty">
+                  Add a card with the star button.
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <button
           className="hud-bookmark"

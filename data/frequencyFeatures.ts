@@ -1,4 +1,4 @@
-import type { FrequencyFeature } from '@/types/spectrum'
+import type { FrequencyFeature, FrequencyRegulatoryNote } from '@/types/spectrum'
 import { universalVibrationFeatures } from './universalVibrationsAtlas'
 
 const C = {
@@ -45,6 +45,189 @@ const C = {
   auto_radar: '#ff9800',
 } as const
 
+const REG_SRC = {
+  fcc15247: {
+    label: '47 CFR 15.247',
+    url: 'https://www.ecfr.gov/current/title-47/section-15.247',
+  },
+  fcc15407: {
+    label: '47 CFR 15.407',
+    url: 'https://www.ecfr.gov/current/title-47/section-15.407',
+  },
+  fcc95567: {
+    label: '47 CFR 95.567',
+    url: 'https://www.ecfr.gov/current/title-47/section-95.567',
+  },
+  fcc951767: {
+    label: '47 CFR 95.1767',
+    url: 'https://www.ecfr.gov/current/title-47/section-95.1767',
+  },
+  fcc95963: {
+    label: '47 CFR 95.963',
+    url: 'https://www.ecfr.gov/current/title-47/section-95.963',
+  },
+  fcc95967: {
+    label: '47 CFR 95.967',
+    url: 'https://www.ecfr.gov/current/title-47/section-95.967',
+  },
+  cept7003: {
+    label: 'ERC Recommendation 70-03',
+    url: 'https://cept.org/documents/srdmg/37887/srdmg-17-112_latest-update-rec_-70-03',
+  },
+  ecc0408: {
+    label: 'ECC Decision (04)08',
+    url: 'https://docdb.cept.org/download/3448',
+  },
+  ecc1505: {
+    label: 'ECC Decision (15)05',
+    url: 'https://docdb.cept.org/download/1491',
+  },
+  ecc2001: {
+    label: 'ECC Decision (20)01',
+    url: 'https://docdb.cept.org/download/4567',
+  },
+  etsi300328: {
+    label: 'ETSI EN 300 328',
+    url: 'https://www.etsi.org/deliver/etsi_en/300300_300399/300328/02.02.02_60/en_300328v020202p.pdf',
+  },
+  wlanChannels: {
+    label: 'WLAN channel reference',
+    url: 'https://en.wikipedia.org/wiki/List_of_WLAN_channels',
+  },
+} as const
+
+const R = {
+  usPart15247: {
+    region: 'US FCC Part 15',
+    range: '902-928 / 2400-2483.5 / 5725-5850 MHz',
+    limit: '1 W max conducted output for digital modulation; antenna/EIRP rules still apply.',
+    conditions: 'Unlicensed Part 15 operation: certified devices must accept interference and may not cause harmful interference.',
+    source: REG_SRC.fcc15247,
+  },
+  euWifi24: {
+    region: 'EU/ETSI',
+    range: '2400-2483.5 MHz',
+    limit: '20 dBm (100 mW) e.i.r.p.; PSD max 10 dBm/MHz for non-FHSS.',
+    conditions: 'RED harmonised standard for wideband data systems such as WiFi, Bluetooth and Zigbee.',
+    source: REG_SRC.etsi300328,
+  },
+  usWifi24Edge: {
+    region: 'US FCC edge channels',
+    range: 'Channels 12-13 / 2483.5 MHz edge',
+    limit: 'Only compliant if the occupied signal remains inside 2400-2483.5 MHz.',
+    conditions: 'Channel 14 is not allowed for normal WiFi in the US; many devices disable channels 12-13 by region.',
+    source: REG_SRC.fcc15247,
+  },
+  euWifi5Lower: {
+    region: 'EU/CEPT',
+    range: '5150-5350 MHz',
+    limit: '200 mW mean e.i.r.p.; indoor use. DFS/TPC required above 5250 MHz.',
+    conditions: 'National implementations can add restrictions.',
+    source: REG_SRC.ecc0408,
+  },
+  euWifi5Upper: {
+    region: 'EU/CEPT',
+    range: '5470-5725 MHz',
+    limit: '1 W mean e.i.r.p.; indoor/outdoor allowed with DFS and TPC.',
+    conditions: 'Protects radar and satellite services; moving vehicles/aircraft are restricted in DFS bands.',
+    source: REG_SRC.ecc0408,
+  },
+  usWifi5: {
+    region: 'US FCC U-NII',
+    range: '5.15-5.895 GHz',
+    limit: 'Power limits vary by U-NII block; 5.725-5.850 GHz allows up to 1 W conducted for APs.',
+    conditions: 'DFS applies in 5.25-5.35 and 5.47-5.725 GHz bands.',
+    source: REG_SRC.fcc15407,
+  },
+  usWifi6e: {
+    region: 'US FCC 6 GHz',
+    range: '5925-7125 MHz',
+    limit: 'LPI AP/subordinate 30 dBm EIRP; VLP 14 dBm; standard power 36 dBm in U-NII-5/7 with AFC.',
+    conditions: 'Indoor AP restrictions, client control rules and AFC/geofencing classes apply.',
+    source: REG_SRC.fcc15407,
+  },
+  euWifi6e: {
+    region: 'EU/CEPT 6 GHz',
+    range: '5945-6425 MHz',
+    limit: 'LPI 23 dBm e.i.r.p. indoor only; VLP 14 dBm e.i.r.p. indoor/outdoor.',
+    conditions: 'VLP use on drones is prohibited; LPI outdoor/road-vehicle use is not permitted.',
+    source: REG_SRC.ecc2001,
+  },
+  euSrd433: {
+    region: 'EU/CEPT SRD',
+    range: '433.05-434.79 MHz',
+    limit: '10 mW e.r.p. with <=10% duty cycle for common narrowband SRDs.',
+    conditions: 'Wideband variants and national implementations can have different limits.',
+    source: REG_SRC.cept7003,
+  },
+  euSrd868: {
+    region: 'EU/CEPT SRD',
+    range: '863-870 MHz',
+    limit: 'Typical LoRa/SRD sub-bands use 25 mW e.r.p.; 868.0-868.6 MHz allows <=1% duty cycle.',
+    conditions: '868.7-869.2 MHz is typically <=0.1%; 869.4-869.65 MHz allows 500 mW e.r.p. with <=10% duty cycle.',
+    source: REG_SRC.cept7003,
+  },
+  euRfid865: {
+    region: 'EU/CEPT RFID',
+    range: '865-868 MHz',
+    limit: '865-865.6 MHz: 100 mW e.r.p.; 865.6-867.6 MHz: 2 W e.r.p.; 867.6-868 MHz: 500 mW e.r.p.',
+    conditions: 'RFID channel width and implementation status vary by country.',
+    source: REG_SRC.cept7003,
+  },
+  usFrs: {
+    region: 'US FRS',
+    range: '462/467 MHz channels',
+    limit: '2 W ERP on channels 1-7 and 15-22; 0.5 W ERP on channels 8-14.',
+    conditions: 'Licence-free only with FRS-compliant radios.',
+    source: REG_SRC.fcc95567,
+  },
+  usGmrs: {
+    region: 'US GMRS',
+    range: '462/467 MHz channels',
+    limit: 'Up to 50 W transmitter output on mobile/repeater/base main channels; lower limits on interstitial channels.',
+    conditions: 'GMRS licence required.',
+    source: REG_SRC.fcc951767,
+  },
+  euPmr446: {
+    region: 'EU/CEPT PMR446',
+    range: '446.0-446.2 MHz',
+    limit: '500 mW e.r.p. max.',
+    conditions: 'Handheld/mobile use only; no base stations, repeaters or fixed infrastructure.',
+    source: REG_SRC.ecc1505,
+  },
+  usCbChannels: {
+    region: 'US CBRS',
+    range: '26.965-27.405 MHz',
+    limit: '40 channels; AM/FM carrier power max 4 W, SSB PEP max 12 W.',
+    conditions: 'Licence-by-rule service; external RF power amplifiers are prohibited.',
+    source: REG_SRC.fcc95967,
+  },
+  usCbPlan: {
+    region: 'US CBRS channel plan',
+    range: 'Channels 1-40',
+    limit: 'Channel centers run from 26.965 MHz to 27.405 MHz.',
+    conditions: 'CB transmitters must stay on the listed channel centers.',
+    source: REG_SRC.fcc95963,
+  },
+} satisfies Record<string, FrequencyRegulatoryNote>
+
+function mhzAliases(centerMHz: number, ...extra: string[]): string[] {
+  return Array.from(new Set([
+    `${centerMHz}`,
+    `${centerMHz}mhz`,
+    `${centerMHz} mhz`,
+    `${(centerMHz / 1000).toFixed(3)}ghz`,
+    `${(centerMHz / 1000).toFixed(3)} ghz`,
+    ...extra,
+  ]))
+}
+
+function wifi24Regulatory(channel: number): FrequencyRegulatoryNote[] {
+  return channel >= 12
+    ? [R.euWifi24, R.usPart15247, R.usWifi24Edge]
+    : [R.euWifi24, R.usPart15247]
+}
+
 // ─── WiFi 2.4 GHz ch1–13 (existing) ──────────────────────────────────────────
 const wifi24Channels = Array.from({ length: 13 }, (_, index) => {
   const channel = index + 1
@@ -57,9 +240,12 @@ const wifi24Channels = Array.from({ length: 13 }, (_, index) => {
     frequency_bandwidth: 22e6,
     category: 'technology',
     family: 'WiFi 2.4 GHz',
-    detail: `Channel ${channel} = ${(centerMHz / 1000).toFixed(3)} GHz, nominal 22 MHz occupied bandwidth (IEEE 802.11b/g/n)`,
+    detail: `Channel ${channel} center is ${centerMHz} MHz (${(centerMHz / 1000).toFixed(3)} GHz). 2.4 GHz WLAN channels are spaced 5 MHz; legacy DSSS occupies about 22 MHz and OFDM is normally treated as a 20 MHz channel. Channels 1/6/11 are the common non-overlapping plan.`,
     color: channel === 1 || channel === 6 || channel === 11 ? '#00f5d4' : C.wifi_24,
     minZoom: 18,
+    aliases: mhzAliases(centerMHz, `wifi channel ${channel}`, `wi-fi channel ${channel}`, `channel ${channel}`, `ch ${channel}`, `ch${channel}`, `2.4g ch${channel}`, `2.4ghz channel ${channel}`),
+    regulatory: wifi24Regulatory(channel),
+    sources: [REG_SRC.wlanChannels],
   } satisfies FrequencyFeature
 })
 
@@ -78,6 +264,8 @@ const zigbeeChannels = Array.from({ length: 16 }, (_, i) => {
     detail: `Zigbee (IEEE 802.15.4) channel ${ch} at ${centerMHz} MHz, 2 MHz occupied BW, O-QPSK 250 kbps`,
     color: C.zigbee,
     minZoom: 22,
+    aliases: mhzAliases(centerMHz, `zigbee channel ${ch}`, `channel ${ch}`, `ch ${ch}`, `ch${ch}`),
+    regulatory: [R.euWifi24, R.usPart15247],
   } satisfies FrequencyFeature
 })
 
@@ -93,9 +281,17 @@ const wifi5Channels = [36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,1
     frequency_bandwidth: 20e6,
     category: 'technology',
     family: 'WiFi 5 GHz',
-    detail: `IEEE 802.11a/n/ac/ax channel ${ch} at ${(centerMHz / 1000).toFixed(3)} GHz${isDFS ? ', DFS/TPC required' : ''}`,
+    detail: `IEEE 802.11a/n/ac/ax channel ${ch} center is ${centerMHz} MHz (${(centerMHz / 1000).toFixed(3)} GHz). Nominal 20 MHz channel; adjacent channel bonding creates 40/80/160 MHz WLAN channels.${isDFS ? ' DFS/TPC required in most regulatory domains.' : ''}`,
     color: isDFS ? '#e8a838' : C.wifi_5,
     minZoom: 20,
+    aliases: mhzAliases(centerMHz, `wifi channel ${ch}`, `wi-fi channel ${ch}`, `5g channel ${ch}`, `5ghz channel ${ch}`, `channel ${ch}`, `ch ${ch}`, `ch${ch}`),
+    regulatory: [
+      R.usWifi5,
+      ...(ch >= 36 && ch <= 64 ? [R.euWifi5Lower] : []),
+      ...(ch >= 100 && ch <= 144 ? [R.euWifi5Upper] : []),
+      ...(ch >= 149 ? [R.usPart15247] : []),
+    ],
+    sources: [REG_SRC.wlanChannels],
   } satisfies FrequencyFeature
 })
 
@@ -113,9 +309,12 @@ const wifi6eChannels = wifi6eChannelNums.map(ch => {
     frequency_bandwidth: 20e6,
     category: 'technology',
     family: 'WiFi 6E (6 GHz)',
-    detail: `IEEE 802.11ax (Wi-Fi 6E) channel ${ch} at ${(centerMHz / 1000).toFixed(3)} GHz${isEU ? ' — available EU/UK' : ' — US/Canada only'}`,
+    detail: `IEEE 802.11ax/be 6 GHz channel ${ch} center is ${centerMHz} MHz (${(centerMHz / 1000).toFixed(3)} GHz). Channel formula: center MHz = 5940 + 5 x channel.${isEU ? ' This 20 MHz channel is inside the EU/CEPT 5945-6425 MHz lower-6 GHz allocation.' : ' This 20 MHz channel is above the current EU/CEPT lower-6 GHz allocation and depends on US/Canada/other regional rules.'}`,
     color: C.wifi_6e,
     minZoom: 25,
+    aliases: mhzAliases(centerMHz, `wifi 6e channel ${ch}`, `wi-fi 6e channel ${ch}`, `6ghz channel ${ch}`, `6e channel ${ch}`, `channel ${ch}`, `ch ${ch}`, `ch${ch}`),
+    regulatory: [R.usWifi6e, ...(isEU ? [R.euWifi6e] : [])],
+    sources: [REG_SRC.wlanChannels],
   } satisfies FrequencyFeature
 })
 
@@ -795,7 +994,7 @@ const baseFrequencyFeatures: FrequencyFeature[] = [
     frequency_bandwidth: 1740000,
     category: 'technology',
     family: 'ISM 433 MHz',
-    detail: '433.05–434.79 MHz: EU ISM band (ITU Region 1). Key fobs, weather stations, LoRa EU433, OOK sensors. 433.92 MHz is the ITU center. 10 mW ERP / 1% duty cycle.',
+    detail: '433.05-434.79 MHz: EU SRD/ISM band (ITU Region 1). Key fobs, weather stations, LoRa EU433 and OOK sensors often use 433.92 MHz. CEPT common SRD limit is 10 mW e.r.p. with <=10% duty cycle for narrowband devices.',
     color: C.ism_433,
     minZoom: 5,
   },
@@ -830,10 +1029,10 @@ const baseFrequencyFeatures: FrequencyFeature[] = [
     label: 'PMR446 (EU Licence-Free)',
     shortLabel: 'PMR446',
     frequency_center: 446093750,
-    frequency_bandwidth: 87500,
+    frequency_bandwidth: 200000,
     category: 'radio',
     family: 'PMR446',
-    detail: '446.00625–446.09375 MHz: 16 FM channels (8 analogue + 8 dPMR digital). Licence-free handheld radios across EU. 500 mW ERP max. Integral antenna mandatory (ETSI EN 300 296).',
+    detail: '446.0-446.2 MHz: licence-free PMR446 handheld band in CEPT/EU. Analogue channels use 12.5 kHz spacing; digital dPMR/DMR variants use 6.25/12.5 kHz plans. 500 mW e.r.p. max, handheld use only.',
     color: C.pmr,
     minZoom: 6,
   },
@@ -861,7 +1060,7 @@ const baseFrequencyFeatures: FrequencyFeature[] = [
     frequency_bandwidth: 5000000,
     category: 'radio',
     family: 'FRS / GMRS',
-    detail: '462.5–467.7 MHz: FRS (0.5 W, no licence) and GMRS (5–50 W, GMRS licence) in US. 22 shared channels, 12.5 kHz spacing, FM voice. CTCSS/DCS squelch common.',
+    detail: '462.5-467.7 MHz: US FRS and GMRS personal radio channels. FRS is licence-free with 2 W ERP on channels 1-7/15-22 and 0.5 W on channels 8-14. GMRS requires a licence and can use higher power on GMRS channels.',
     color: C.pmr,
     minZoom: 6,
   },
@@ -927,7 +1126,7 @@ const baseFrequencyFeatures: FrequencyFeature[] = [
     frequency_bandwidth: 3000000,
     category: 'technology',
     family: 'UHF RFID',
-    detail: '865–868 MHz: European UHF RFID band (ETSI EN 302 208). EPC Gen2 / ISO 18000-6C. 865.7 / 866.3 / 866.9 / 867.5 MHz channels. Logistics, retail, access control. 2 W ERP max.',
+    detail: '865-868 MHz: European UHF RFID band (ETSI EN 302 208). EPC Gen2 / ISO 18000-6C. High-power RFID is concentrated in 865.6-867.6 MHz at up to 2 W e.r.p.; edge slices have lower limits.',
     color: C.uhf_rfid,
     minZoom: 5,
   },
@@ -1099,7 +1298,7 @@ const baseFrequencyFeatures: FrequencyFeature[] = [
     frequency_bandwidth: 26000000,
     category: 'technology',
     family: 'ISM 915 MHz',
-    detail: '902–928 MHz: North American ISM band. Hosts LoRaWAN US915, Zigbee 900, Thread, 802.11ah (HaLow), FHSS cordless phones, RFID UHF (902–928 MHz per EPCglobal Gen2). 1 W max EIRP.',
+    detail: '902-928 MHz: North American ISM band. Hosts LoRaWAN US915, Zigbee 900, Thread, 802.11ah (HaLow), FHSS cordless phones and UHF RFID. FCC Part 15.247 permits up to 1 W conducted output for compliant hopping/digital systems.',
     color: C.ism_915,
     minZoom: 5,
   },
@@ -1912,4 +2111,116 @@ function withModulationMetadata(feature: FrequencyFeature): FrequencyFeature {
   }
 }
 
-export const frequencyFeatures: FrequencyFeature[] = baseFrequencyFeatures.map(withModulationMetadata)
+function regulatoryKey(note: FrequencyRegulatoryNote): string {
+  return `${note.region}|${note.range ?? ''}|${note.limit}|${note.source?.label ?? ''}`
+}
+
+function mergeRegulatoryNotes(
+  existing: FrequencyRegulatoryNote[] | undefined,
+  additions: FrequencyRegulatoryNote[]
+): FrequencyRegulatoryNote[] {
+  const merged = [...(existing ?? [])]
+  const seen = new Set(merged.map(regulatoryKey))
+
+  for (const note of additions) {
+    const key = regulatoryKey(note)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(note)
+  }
+
+  return merged
+}
+
+function regulatoryNotesForFeature(feature: FrequencyFeature): FrequencyRegulatoryNote[] {
+  const notes: FrequencyRegulatoryNote[] = []
+
+  if (
+    feature.family === 'WiFi 2.4 GHz' ||
+    feature.family === 'Zigbee 2.4 GHz' ||
+    feature.family === 'Bluetooth Classic' ||
+    feature.family === 'Bluetooth LE' ||
+    feature.family === 'WiFi / Bluetooth / ISM'
+  ) {
+    notes.push(R.euWifi24, R.usPart15247)
+  }
+
+  if (feature.id === 'wifi-24-ch14') {
+    notes.push({
+      region: 'Japan WLAN edge case',
+      range: '2484 MHz channel 14',
+      limit: 'Allowed only for 802.11b DSSS/CCK in Japan.',
+      conditions: 'Not valid for normal OFDM WiFi operation in most countries.',
+      source: REG_SRC.wlanChannels,
+    })
+  }
+
+  if (feature.family === 'WiFi 5 GHz') {
+    notes.push(R.usWifi5)
+  }
+  if (feature.id === 'wifi-5-full-overview') notes.push(R.euWifi5Lower, R.euWifi5Upper)
+  if (feature.id === 'wifi-5-unii1' || feature.id === 'wifi-5-unii2a') notes.push(R.euWifi5Lower)
+  if (feature.id === 'wifi-5-unii2c') notes.push(R.euWifi5Upper)
+  if (feature.id === 'wifi-5-unii3' || feature.id === 'ism-5800') notes.push(R.usPart15247)
+
+  if (feature.family === 'WiFi 6E (6 GHz)' || feature.id === 'wifi-6e-overview') {
+    notes.push(R.usWifi6e)
+    if (feature.frequency_center <= 6425e6 || feature.id === 'wifi-6e-overview') notes.push(R.euWifi6e)
+  }
+
+  if (feature.id.startsWith('ism-433')) notes.push(R.euSrd433)
+  if (feature.id === 'eu-srd868-overview' || feature.id.startsWith('lora-eu868') || feature.id === 'wmbus-mode-t1') {
+    notes.push(R.euSrd868)
+  }
+  if (feature.id === 'uhf-rfid-865') notes.push(R.euRfid865)
+  if (
+    feature.id === 'ism-915-overview' ||
+    feature.id === 'uhf-rfid-902' ||
+    feature.id === 'uhf-rfid-928' ||
+    feature.family === 'LoRaWAN US915'
+  ) {
+    notes.push(R.usPart15247)
+  }
+
+  if (feature.id === 'pmr446') notes.push(R.euPmr446)
+  if (feature.id === 'frs-gmrs') notes.push(R.usFrs, R.usGmrs)
+  if (feature.id === 'cb-band-overview' || feature.id === 'cb-ch19') notes.push(R.usCbChannels, R.usCbPlan)
+
+  return notes
+}
+
+function withRegulatoryMetadata(feature: FrequencyFeature): FrequencyFeature {
+  const regulatory = mergeRegulatoryNotes(feature.regulatory, regulatoryNotesForFeature(feature))
+  if (regulatory.length === 0) return feature
+
+  return {
+    ...feature,
+    regulatory,
+  }
+}
+
+function withFrequencySearchAliases(feature: FrequencyFeature): FrequencyFeature {
+  if (feature.atlasCategory) return feature
+
+  const centerMHz = feature.frequency_center / 1e6
+  const centerGHz = feature.frequency_center / 1e9
+  const aliases = new Set(feature.aliases ?? [])
+
+  if (centerMHz >= 0.001 && centerMHz < 1_000_000) {
+    aliases.add(`${Number(centerMHz.toFixed(6))}`)
+    aliases.add(`${Number(centerMHz.toFixed(6))} mhz`)
+  }
+  if (centerGHz >= 0.001 && centerGHz < 1000) {
+    aliases.add(`${Number(centerGHz.toFixed(6))} ghz`)
+  }
+
+  return {
+    ...feature,
+    aliases: Array.from(aliases),
+  }
+}
+
+export const frequencyFeatures: FrequencyFeature[] = baseFrequencyFeatures
+  .map(withModulationMetadata)
+  .map(withRegulatoryMetadata)
+  .map(withFrequencySearchAliases)
