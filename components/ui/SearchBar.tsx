@@ -189,14 +189,41 @@ function sortResultsByPriority(
     .map(item => item.result)
 }
 
+// Pure facet tally over a result set (before facet filtering) — so each facet
+// chip can show how many matches it *would* have. Extracted from state so it can
+// run inside the results useMemo.
+function computeFacetCounts(source: SearchResult[]): {
+  modulation: Record<ModulationFacet, number>
+  signalClass: Record<SignalClassFacet, number>
+} {
+  const candidates = source
+    .filter(item => item.type !== 'band' && item.type !== 'educational')
+    .map(item => item.data as FrequencyFeature)
+    .filter(item => (item.modulationTypes ?? []).length > 0)
+
+  const modulation: Record<ModulationFacet, number> = { ...EMPTY_MODULATION_COUNTS, All: candidates.length }
+  for (const facet of MODULATION_FACETS) {
+    if (facet === 'All') continue
+    const key = facet.toLowerCase()
+    modulation[facet] = candidates.filter(feature =>
+      (feature.modulationTypes ?? []).some(mod => mod.toLowerCase().includes(key))
+    ).length
+  }
+
+  const signalClass: Record<SignalClassFacet, number> = { ...EMPTY_SIGNAL_COUNTS, All: candidates.length }
+  signalClass.Digital = candidates.filter(feature => modulationSignalClass(feature.modulationTypes) === 'Digital').length
+  signalClass.Analog = candidates.filter(feature => modulationSignalClass(feature.modulationTypes) === 'Analog').length
+  signalClass.Hybrid = candidates.filter(feature => modulationSignalClass(feature.modulationTypes) === 'Hybrid').length
+
+  return { modulation, signalClass }
+}
+
 export function SearchBar({ onBandSelect }: SearchBarProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
   const [modulationFacet, setModulationFacet] = useState<ModulationFacet>('All')
   const [signalClassFacet, setSignalClassFacet] = useState<SignalClassFacet>('All')
-  const [modulationFacetCounts, setModulationFacetCounts] = useState<Record<ModulationFacet, number>>(EMPTY_MODULATION_COUNTS)
-  const [signalClassFacetCounts, setSignalClassFacetCounts] = useState<Record<SignalClassFacet, number>>(EMPTY_SIGNAL_COUNTS)
   const [open, setOpen] = useState(false)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { allBands } = useSpectrumData({ centerFrequency: 1e9, zoomLevel: 1, lodLevel: 0 })
@@ -215,6 +242,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   const detailLayers = useSpectrumStore(s => s.detailLayers)
   const toggleLayer = useSpectrumStore(s => s.toggleLayer)
   const toggleDetailLayer = useSpectrumStore(s => s.toggleDetailLayer)
+  const openEducationalStory = useSpectrumStore(s => s.openEducationalStory)
   const selectedFeature = useMemo(
     () => (selectedFeatureId ? FEATURE_BY_ID.get(selectedFeatureId) : null),
     [selectedFeatureId]
@@ -238,6 +266,59 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
     () => new Set(favoriteResults.map(item => item.data.id)),
     [favoriteResults]
   )
+
+  // Derived search results + facet counts. Pure derivation from query/facets, so
+  // it belongs in render (useMemo), not in an effect that setState's them.
+  const { results, modulationFacetCounts, signalClassFacetCounts } = useMemo(() => {
+    if (allBands.length === 0 || !query.trim()) {
+      return {
+        results: [] as SearchResult[],
+        modulationFacetCounts: EMPTY_MODULATION_COUNTS,
+        signalClassFacetCounts: EMPTY_SIGNAL_COUNTS,
+      }
+    }
+    const baseResults = search(query, allBands, { rfOnly: searchScope === 'rf' })
+    let merged = baseResults
+    if (selectedFeature && relatedBaseResults.length > 0) {
+      const q = query.trim().toLowerCase()
+      const relatedFiltered = relatedBaseResults.filter(item =>
+        item.label.toLowerCase().includes(q) || item.sublabel.toLowerCase().includes(q)
+      )
+      if (relatedFiltered.length > 0) {
+        const rids = new Set(relatedFiltered.map(item => item.data.id))
+        merged = [...relatedFiltered, ...baseResults.filter(item => !rids.has(item.data.id))]
+      }
+    }
+    const counts = computeFacetCounts(merged)
+    const modulationFiltered = modulationFacet === 'All'
+      ? merged
+      : merged.filter(result => {
+          if (result.type === 'band' || result.type === 'educational') return false
+          const feature = result.data as FrequencyFeature
+          return (feature.modulationTypes ?? []).some(mod => mod.toLowerCase().includes(modulationFacet.toLowerCase()))
+        })
+    const filtered = signalClassFacet === 'All'
+      ? modulationFiltered
+      : modulationFiltered.filter(result => {
+          if (result.type === 'band' || result.type === 'educational') return false
+          const feature = result.data as FrequencyFeature
+          return modulationSignalClass(feature.modulationTypes) === signalClassFacet
+        })
+    return {
+      results: sortResultsByPriority(filtered, { query, density: detailDensity, favoriteIds, relatedIds, searchScope }),
+      modulationFacetCounts: counts.modulation,
+      signalClassFacetCounts: counts.signalClass,
+    }
+  }, [query, allBands, detailDensity, selectedFeature, relatedBaseResults, favoriteIds, relatedIds, modulationFacet, signalClassFacet, searchScope])
+
+  // Reset the keyboard highlight whenever a fresh result set is produced. The memo
+  // returns a new array only when inputs change, so this fires exactly then.
+  const [prevResults, setPrevResults] = useState(results)
+  if (prevResults !== results) {
+    setPrevResults(results)
+    setActiveIdx(0)
+  }
+
   const relatedResultIndices = useMemo(() => {
     const indices: number[] = []
     for (let i = 0; i < results.length; i += 1) {
@@ -248,29 +329,6 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   const hasRelatedContext = Boolean(selectedFeature && relatedBaseResults.length > 0)
   const relatedMatchCount = relatedResultIndices.length
 
-  const updateFacetCounts = useCallback((source: SearchResult[]) => {
-    const candidates = source
-      .filter(item => item.type !== 'band' && item.type !== 'educational')
-      .map(item => item.data as FrequencyFeature)
-      .filter(item => (item.modulationTypes ?? []).length > 0)
-
-    const modulationCounts: Record<ModulationFacet, number> = { ...EMPTY_MODULATION_COUNTS, All: candidates.length }
-    for (const facet of MODULATION_FACETS) {
-      if (facet === 'All') continue
-      const key = facet.toLowerCase()
-      modulationCounts[facet] = candidates.filter(feature =>
-        (feature.modulationTypes ?? []).some(mod => mod.toLowerCase().includes(key))
-      ).length
-    }
-
-    const signalCounts: Record<SignalClassFacet, number> = { ...EMPTY_SIGNAL_COUNTS, All: candidates.length }
-    signalCounts.Digital = candidates.filter(feature => modulationSignalClass(feature.modulationTypes) === 'Digital').length
-    signalCounts.Analog = candidates.filter(feature => modulationSignalClass(feature.modulationTypes) === 'Analog').length
-    signalCounts.Hybrid = candidates.filter(feature => modulationSignalClass(feature.modulationTypes) === 'Hybrid').length
-
-    setModulationFacetCounts(modulationCounts)
-    setSignalClassFacetCounts(signalCounts)
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -280,6 +338,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
     const ss = params.get('ss')
 
     if (sq) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restores search state from the URL on mount (params are unavailable during SSR)
       setQuery(sq)
       setOpen(true)
     }
@@ -297,17 +356,32 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
 
-    if (query.trim()) params.set('sq', query.trim())
-    else params.delete('sq')
+    if (query.trim()) {
+      params.set('sq', query.trim())
 
-    if (modulationFacet !== 'All') params.set('sm', modulationFacet)
-    else params.delete('sm')
+      if (modulationFacet !== 'All') params.set('sm', modulationFacet)
+      else params.delete('sm')
 
-    if (signalClassFacet !== 'All') params.set('ss', signalClassFacet)
-    else params.delete('ss')
+      if (signalClassFacet !== 'All') params.set('ss', signalClassFacet)
+      else params.delete('ss')
+    } else {
+      params.delete('sq')
+      params.delete('sm')
+      params.delete('ss')
+    }
 
-    window.history.replaceState(null, '', `?${params.toString()}`)
+    const queryString = params.toString()
+    window.history.replaceState(null, '', queryString ? `?${queryString}` : window.location.pathname)
   }, [query, modulationFacet, signalClassFacet])
+
+  // When the query is cleared, collapse advanced filters and reset facets.
+  // Adjusted during render (guarded so it only fires when something actually
+  // changes, which prevents a render loop) rather than in an effect.
+  if (!query.trim() && (showAdvancedFilters || modulationFacet !== 'All' || signalClassFacet !== 'All')) {
+    setShowAdvancedFilters(false)
+    setModulationFacet('All')
+    setSignalClassFacet('All')
+  }
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -319,74 +393,15 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
       if (e.key === 'Escape') {
         setOpen(false)
         setQuery('')
+        setShowAdvancedFilters(false)
+        setModulationFacet('All')
+        setSignalClassFacet('All')
         inputRef.current?.blur()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  useEffect(() => {
-    if (allBands.length === 0) {
-      updateFacetCounts([])
-      setResults([])
-      setActiveIdx(0)
-      return
-    }
-
-    if (!query.trim()) {
-      const emptySearchResults = selectedFeature ? relatedBaseResults : favoriteResults
-      const source = searchScope === 'rf'
-        ? emptySearchResults.filter(result => result.type === 'band' || result.type === 'technology')
-        : emptySearchResults
-      updateFacetCounts(source)
-      setResults(source)
-      setActiveIdx(0)
-      return
-    }
-
-    const baseResults = search(query, allBands, { rfOnly: searchScope === 'rf' })
-
-    let merged = baseResults
-    if (selectedFeature && relatedBaseResults.length > 0) {
-      const q = query.trim().toLowerCase()
-      const relatedFiltered = relatedBaseResults.filter(item =>
-        item.label.toLowerCase().includes(q) || item.sublabel.toLowerCase().includes(q)
-      )
-
-      if (relatedFiltered.length > 0) {
-        const relatedIds = new Set(relatedFiltered.map(item => item.data.id))
-        merged = [...relatedFiltered, ...baseResults.filter(item => !relatedIds.has(item.data.id))]
-      }
-    }
-
-    updateFacetCounts(merged)
-
-    const modulationFiltered = modulationFacet === 'All'
-      ? merged
-      : merged.filter(result => {
-          if (result.type === 'band' || result.type === 'educational') return false
-          const feature = result.data as FrequencyFeature
-          return (feature.modulationTypes ?? []).some(mod => mod.toLowerCase().includes(modulationFacet.toLowerCase()))
-        })
-
-    const filtered = signalClassFacet === 'All'
-      ? modulationFiltered
-      : modulationFiltered.filter(result => {
-          if (result.type === 'band' || result.type === 'educational') return false
-          const feature = result.data as FrequencyFeature
-          return modulationSignalClass(feature.modulationTypes) === signalClassFacet
-        })
-
-    setResults(sortResultsByPriority(filtered, {
-      query,
-      density: detailDensity,
-      favoriteIds,
-      relatedIds,
-      searchScope,
-    }))
-    setActiveIdx(0)
-  }, [query, allBands, detailDensity, selectedFeature, relatedBaseResults, favoriteResults, favoriteIds, relatedIds, modulationFacet, signalClassFacet, searchScope, updateFacetCounts])
 
   const handleSelect = useCallback(
     (result: SearchResult) => {
@@ -399,6 +414,8 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         onBandSelect?.(band)
       } else if (result.type === 'educational') {
         selectBand(null)
+        // Open the story popup + animate to it (handled in SpectrumCanvas).
+        openEducationalStory(result.data.id)
       } else {
         const feature = result.data as FrequencyFeature
         if (!showApplications) toggleLayer('applications')
@@ -410,9 +427,12 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         selectBand(null)
       }
       setQuery('')
+      setShowAdvancedFilters(false)
+      setModulationFacet('All')
+      setSignalClassFacet('All')
       setOpen(false)
     },
-    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect]
+    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect, openEducationalStory]
   )
 
   const getResultGroup = (result: SearchResult) => {
@@ -459,12 +479,19 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   const handleResetFacets = () => {
     setModulationFacet('All')
     setSignalClassFacet('All')
+    setShowAdvancedFilters(false)
   }
 
   const handleCopyFilteredLink = () => {
     if (typeof window === 'undefined') return
     navigator.clipboard.writeText(window.location.href).catch(() => {})
   }
+
+  const hasSearchQuery = query.trim().length > 0
+  const hasActiveFacets = modulationFacet !== 'All' || signalClassFacet !== 'All'
+  const hasFilterableResults = modulationFacetCounts.All > 0
+  const showSearchPanel = open && hasSearchQuery
+  const showFilterToggle = hasFilterableResults || hasActiveFacets
 
   const groupedResults = results.reduce<Array<{ group: string; items: SearchResult[] }>>((groups, result) => {
     const group = getResultGroup(result)
@@ -497,6 +524,9 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
     } else if (e.key === 'Escape') {
       setOpen(false)
       setQuery('')
+      setShowAdvancedFilters(false)
+      setModulationFacet('All')
+      setSignalClassFacet('All')
     }
   }
 
@@ -507,6 +537,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         <input
           ref={inputRef}
           type="search"
+          role="combobox"
           className="search-input"
           placeholder="Search tech, bands, frequencies... Ctrl K"
           value={query}
@@ -515,7 +546,8 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
           onKeyDown={handleKeyDown}
           aria-label="Search electromagnetic spectrum"
           aria-autocomplete="list"
-          aria-expanded={open && results.length > 0}
+          aria-expanded={showSearchPanel && results.length > 0}
+          aria-controls="search-results-panel"
           autoComplete="off"
         />
         {hasRelatedContext && (
@@ -525,8 +557,8 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         )}
       </div>
 
-      {open && (
-        <>
+      {showSearchPanel && (
+        <div className="search-panel" id="search-results-panel">
           <div className="search-facets search-scope-facets" role="toolbar" aria-label="Search scope">
             {SEARCH_SCOPE_OPTIONS.map(option => (
               <button
@@ -540,26 +572,34 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
                 {option.label}
               </button>
             ))}
-            {favoriteResults.length > 0 && !query.trim() && (
-              <span className="search-favorites-hint">
-                {favoriteResults.length} saved
-              </span>
+            {showFilterToggle && (
+              <button
+                type="button"
+                className={`search-filter-toggle ${showAdvancedFilters || hasActiveFacets ? 'active' : ''}`}
+                onClick={() => setShowAdvancedFilters(value => !value)}
+                aria-expanded={showAdvancedFilters}
+                aria-controls="search-advanced-filters"
+              >
+                Filters{hasActiveFacets ? ' on' : ''}
+              </button>
             )}
           </div>
 
-          <div className="search-facets" role="toolbar" aria-label="Signal class filters">
-            {SIGNAL_CLASS_FACETS.map(facet => (
-              <button
-                key={facet}
-                type="button"
-                className={`search-facet-btn ${signalClassFacet === facet ? 'active' : ''}`}
-                onClick={() => setSignalClassFacet(facet)}
-                aria-pressed={signalClassFacet === facet}
-              >
-                {facet} ({signalClassFacetCounts[facet]})
-              </button>
-            ))}
-          </div>
+          {showAdvancedFilters && showFilterToggle && (
+            <div id="search-advanced-filters" className="search-advanced-filters">
+              <div className="search-facets" role="toolbar" aria-label="Signal class filters">
+                {SIGNAL_CLASS_FACETS.map(facet => (
+                  <button
+                    key={facet}
+                    type="button"
+                    className={`search-facet-btn ${signalClassFacet === facet ? 'active' : ''}`}
+                    onClick={() => setSignalClassFacet(facet)}
+                    aria-pressed={signalClassFacet === facet}
+                  >
+                    {facet} ({signalClassFacetCounts[facet]})
+                  </button>
+                ))}
+              </div>
 
           <div className="search-facets" role="toolbar" aria-label="Modulation filters">
             {MODULATION_FACETS.map(facet => (
@@ -590,10 +630,10 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
               Copy link
             </button>
           </div>
-        </>
-      )}
+            </div>
+          )}
 
-      {open && results.length > 0 && (
+          {results.length > 0 && (
         <ul className="search-dropdown" role="listbox">
           {groupedResults.map(group => (
             <li key={group.group} className="search-group">
@@ -631,6 +671,8 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
             </li>
           )}
         </ul>
+          )}
+        </div>
       )}
     </div>
   )

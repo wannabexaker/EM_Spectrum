@@ -99,21 +99,47 @@ export function search(query: string, bands: SpectrumBand[], options: SearchOpti
   if (!featureFuseIndex) buildFeatureSearchIndex()
   if (!educationalFuseIndex) buildEducationalSearchIndex()
 
-  const featureResults = featureFuseIndex!.search(query).map(({ item }) => _featureResult(item))
-  const educationalResults = educationalFuseIndex!.search(query).map(({ item }) => _educationalResult(item))
-  const bandResults = fuseIndex!.search(query).map(({ item }) => ({
-    type: 'band' as const,
-    label: item.label,
-    sublabel: `${formatFrequency(item.frequency_min)} - ${formatFrequency(item.frequency_max)}`,
-    targetFrequency: Math.sqrt(item.frequency_min * item.frequency_max),
-    targetZoom: 8,
-    data: item,
-  }))
+  // Score-ranked merge across all three indexes so the most relevant match wins
+  // regardless of type. A query like "MRI" should surface the MRI story, not be
+  // buried under loosely-fuzzy feature matches (Maritime, Military…). Lower Fuse
+  // score = better; typeRank breaks ties (educational stories, then features, then bands).
+  const scored: Array<{ result: SearchResult; score: number; typeRank: number }> = []
+  for (const { item, score } of featureFuseIndex!.search(query)) {
+    scored.push({ result: _featureResult(item), score: score ?? 1, typeRank: 1 })
+  }
+  for (const { item, score } of educationalFuseIndex!.search(query)) {
+    scored.push({ result: _educationalResult(item), score: score ?? 1, typeRank: 0 })
+  }
+  for (const { item, score } of fuseIndex!.search(query)) {
+    scored.push({
+      result: {
+        type: 'band' as const,
+        label: item.label,
+        sublabel: `${formatFrequency(item.frequency_min)} - ${formatFrequency(item.frequency_max)}`,
+        targetFrequency: Math.sqrt(item.frequency_min * item.frequency_max),
+        targetZoom: 8,
+        data: item,
+      },
+      score: score ?? 1,
+      typeRank: 2,
+    })
+  }
 
-  const allResults = [...featureResults, ...educationalResults, ...bandResults]
+  scored.sort((a, b) => (a.score - b.score) || (a.typeRank - b.typeRank))
+
+  // Dedup by target id, keeping the best-ranked occurrence.
+  const seen = new Set<string>()
+  const merged: SearchResult[] = []
+  for (const { result } of scored) {
+    const id = result.data.id
+    if (seen.has(id)) continue
+    seen.add(id)
+    merged.push(result)
+  }
+
   const visibleResults = options.rfOnly
-    ? allResults.filter(result => result.type === 'band' || result.type === 'technology')
-    : allResults
+    ? merged.filter(result => result.type === 'band' || result.type === 'technology')
+    : merged
 
   return visibleResults.slice(0, 14)
 }

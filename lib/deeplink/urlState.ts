@@ -39,6 +39,22 @@ export function decodeViewportState(): {
   return { centerFrequency: clampFrequency(freq), zoomLevel: clampZoom(zoom), detailDensity }
 }
 
+// Educational example deep link — `?edu=<id>` opens a specific story popup.
+// Kept in sync with the open popup; preserves the viewport params (f/z/d).
+export function setEduParam(id: string | null): void {
+  if (typeof window === 'undefined') return
+  const params = new URLSearchParams(window.location.search)
+  if (id) params.set('edu', id)
+  else params.delete('edu')
+  const qs = params.toString()
+  window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+}
+
+export function getEduParam(): string | null {
+  if (typeof window === 'undefined') return null
+  return new URLSearchParams(window.location.search).get('edu')
+}
+
 export function decodeDetailDensityPreference(): SpectrumDetailDensity | null {
   if (typeof window === 'undefined') return null
 

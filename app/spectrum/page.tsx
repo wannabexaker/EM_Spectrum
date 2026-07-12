@@ -9,6 +9,8 @@ import { SidePanel } from '@/components/spectrum/SidePanel'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { LayerToggle } from '@/components/ui/LayerToggle'
 import { ModeToggle } from '@/components/ui/ModeToggle'
+import { EduAtlasFilter } from '@/components/ui/EduAtlasFilter'
+import { OnboardingTour } from '@/components/ui/OnboardingTour'
 import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
 import { RegulatoryRegionToggle } from '@/components/ui/RegulatoryRegionToggle'
@@ -57,6 +59,7 @@ export default function SpectrumPage() {
           <DetailDensityToggle />
           <div className="header-sep" aria-hidden />
           <ModeToggle />
+          <EduAtlasFilter />
           <UnitSwitcher />
           <RegulatoryRegionToggle />
         </nav>
@@ -72,6 +75,7 @@ export default function SpectrumPage() {
           <SpectrumCanvas />
         </SpectrumErrorBoundary>
         <SidePanel />
+        <OnboardingTour />
       </main>
 
       {/* HUD */}

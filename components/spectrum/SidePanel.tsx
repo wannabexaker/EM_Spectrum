@@ -32,9 +32,13 @@ export function SidePanel() {
   const [shareState, setShareState] = useState<'idle' | 'copied' | 'shared' | 'error'>('idle')
   const isFavorite = selectedBand ? favoriteBandIds.includes(selectedBand.id) : false
 
-  useEffect(() => {
+  // Reset to the overview tab when a different band is opened. Adjusting state
+  // during render (React's recommended pattern) avoids an effect + extra render pass.
+  const [lastBandId, setLastBandId] = useState(selectedBand?.id)
+  if (selectedBand?.id !== lastBandId) {
+    setLastBandId(selectedBand?.id)
     setActiveTab('overview')
-  }, [selectedBand?.id])
+  }
 
   if (!selectedBand) return null
 

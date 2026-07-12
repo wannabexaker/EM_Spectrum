@@ -5,10 +5,12 @@ import type { FrequencyFeature, SpectrumBand, SpectrumCategory, SpectrumDetailDe
 import { F_MIN, LOG_RANGE, formatFrequency, freqToScreenX } from '@/lib/zoom/logMapper'
 import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
+import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
-import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
+import { EDUCATIONAL_EXAMPLES, isEduExampleVisible, type EducationalExample } from '@/data/educationalExamples'
+import { useSpectrumStore } from '@/store/spectrumStore'
 import {
   getEducationalSpacingForDensity,
   getFeatureZoomBoostForDensity,
@@ -36,12 +38,15 @@ export class SpectrumRenderer {
   private labelPool: Text[] = []
   private highlightGraphics: Graphics | null = null
   private axisGraphics: Graphics | null = null
+  private signalGraphics: Graphics | null = null
   private visibleSpectrumContainer: Container | null = null
   private visibleStrips: Graphics[] = []
   private width = 0
   private height = 0
   private _initialized = false
   private _destroyed = false
+  private _prefersReducedMotion = false
+  private _signalFrameSkip = 0
 
   // Animation state
   private animating = false
@@ -50,6 +55,9 @@ export class SpectrumRenderer {
   private animDuration = 45  // ticks (~0.75s at 60fps)
   private animFrom: ZoomState | null = null
   onAnimationFrame?: (state: ZoomState) => void
+  /** Screen-space geometry of the "+N" overflow badges, republished each frame so
+   *  the canvas hit-test can make them clickable (zoom-to-expand). */
+  eduClusters: Array<{ bx: number; by: number; w: number; count: number; centerFreq: number }> = []
 
   // Pending data from React — ticker reads these
   private _pendingBands: SpectrumBand[] = []
@@ -98,6 +106,7 @@ export class SpectrumRenderer {
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    this._prefersReducedMotion = prefersReducedMotion
     this.animDuration = prefersReducedMotion ? 1 : 45
 
     // Local ref — this.app may be nulled by destroy() while we await
@@ -120,6 +129,10 @@ export class SpectrumRenderer {
         resolution: Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2),
         autoDensity: true,
         preference: 'webgl',
+        // Refuse software rendering: on SwiftShader-class rasterizers the shader
+        // compile blocks the main thread for so long the app appears frozen.
+        // Better to fail fast here and let the caller drop to the 2D Safe Mode.
+        failIfMajorPerformanceCaveat: true,
       })
     } catch {
       // Mobile fallback: minimum-cost WebGL init to avoid long "initializing" stalls.
@@ -132,6 +145,7 @@ export class SpectrumRenderer {
         resolution: 1,
         autoDensity: true,
         preference: 'webgl',
+        failIfMajorPerformanceCaveat: true,
       })
     }
 
@@ -150,6 +164,8 @@ export class SpectrumRenderer {
     // Axis layer (always visible, below bands)
     this.axisGraphics = new Graphics()
     this.app.stage.addChild(this.axisGraphics)
+    this.signalGraphics = new Graphics()
+    this.app.stage.addChild(this.signalGraphics)
 
     // LOD containers (0–10) — add all to stage, toggle .visible
     for (let i = 0; i < 11; i++) {
@@ -174,7 +190,7 @@ export class SpectrumRenderer {
 
     // Pre-allocate label Text pool
     const labelStyle = new TextStyle({
-      fontFamily: 'Space Grotesk, sans-serif',
+      fontFamily: canvasFontFamily(),
       fontSize: 11,
       fill: 0xffffff,
       fontWeight: '500',
@@ -234,7 +250,16 @@ export class SpectrumRenderer {
         this._pendingShowEM, this._pendingShowApplications, this._pendingShowHazards,
         this._pendingDetailLayers,
       )
+    } else if (!this._prefersReducedMotion) {
+      this._signalFrameSkip = (this._signalFrameSkip + 1) % 4
+      if (this._signalFrameSkip === 0) this._drawAnimatedBackground()
     }
+  }
+
+  private _drawAnimatedBackground(): void {
+    if (!this.app || !this.signalGraphics || this.width <= 0 || this.height <= 0) return
+    const { centerFrequency, zoomLevel } = this._pendingState
+    this._drawSignalLayer(centerFrequency, zoomLevel, this.width, this.height, this._pendingMode)
   }
 
   private renderFrame(
@@ -259,6 +284,7 @@ export class SpectrumRenderer {
     const trackH = H * TRACK_H_RATIO * spreadFactor
 
     this._drawInstrumentBackground(centerFrequency, zoomLevel, W, H, mode)
+    this._drawSignalLayer(centerFrequency, zoomLevel, W, H, mode)
 
     // Activate correct LOD container
     this.lodContainers.forEach((c, i) => {
@@ -402,24 +428,88 @@ export class SpectrumRenderer {
       g.moveTo(0, y).lineTo(W, y)
         .stroke({ color: lane.pixiColor, alpha: lane.id === 'visible' ? 0.2 : 0.14, width: 0.8 })
     }
+  }
 
-    if (isProfessional) return
+  private _drawSignalLayer(centerFrequency: number, zoomLevel: number, W: number, H: number, mode: SpectrumMode): void {
+    if (!this.signalGraphics) return
+    const g = this.signalGraphics
+    g.clear()
+    const logCenter = Math.log10(Math.max(centerFrequency, F_MIN))
+    const logSpan = LOG_RANGE / zoomLevel
+    this._drawFrequencySignalField(g, logCenter, logSpan, zoomLevel, W, H, mode)
+  }
 
-    const samples = 180
+  private _drawFrequencySignalField(
+    g: Graphics,
+    logCenter: number,
+    logSpan: number,
+    zoomLevel: number,
+    W: number,
+    H: number,
+    mode: SpectrumMode
+  ): void {
     const baseY = H * 0.52
-    const amp = Math.max(10, Math.min(88, 120 / Math.sqrt(zoomLevel)))
-    for (let lane = 0; lane < 3; lane++) {
-      const color = lane === 0 ? 0x00f5d4 : lane === 1 ? 0x7c3cff : 0x00d4ff
-      const phase = lane * 1.8 + performance.now() * 0.00035
-      g.moveTo(0, baseY)
-      for (let i = 0; i <= samples; i++) {
+    const fieldH = Math.max(72, Math.min(H * 0.28, 190))
+    const samples = Math.max(120, Math.min(200, Math.floor(W / 9)))
+    const time = this._prefersReducedMotion ? 0 : performance.now() * 0.001
+    const zoomT = Math.max(0, Math.min(1, (zoomLevel - 1) / 18))
+    const alphaScale = mode === 'professional' ? 0.72 : 1
+
+    g.rect(0, baseY - fieldH / 2, W, fieldH)
+      .fill({ color: 0x00d4ff, alpha: 0.012 * alphaScale })
+
+    for (const lane of SPECTRUM_LANES) {
+      const x1 = freqToScreenX(lane.frequencyMin, W, Math.pow(10, logCenter), LOG_RANGE / logSpan)
+      const x2 = freqToScreenX(lane.frequencyMax, W, Math.pow(10, logCenter), LOG_RANGE / logSpan)
+      const left = Math.max(0, Math.min(x1, x2))
+      const right = Math.min(W, Math.max(x1, x2))
+      if (right - left <= 2) continue
+      g.rect(left, baseY - fieldH / 2, right - left, fieldH)
+        .fill({ color: lane.id === 'visible' ? 0xcfefff : lane.pixiColor, alpha: (lane.id === 'sound' ? 0.006 : 0.009) * alphaScale })
+    }
+
+    g.moveTo(0, baseY).lineTo(W, baseY)
+      .stroke({ color: 0x74d6ff, alpha: 0.07 * alphaScale, width: 0.8 })
+
+    const traceColors = [0x74f7ff, 0x00ff88, 0x7c3cff, 0x00d4ff]
+    for (let trace = 0; trace < 4; trace += 1) {
+      const traceT = trace / 3
+      const baseAlpha = (trace === 0 ? 0.2 : 0.092 - trace * 0.013) * alphaScale
+      const baseWidth = trace === 0 ? 1.35 : 0.75
+      const traceOffset = (trace - 1.5) * fieldH * 0.095
+      g.moveTo(0, baseY + traceOffset)
+
+      for (let i = 1; i <= samples; i += 1) {
         const x = (i / samples) * W
-        const logF = logCenter + (x / W - 0.5) * logSpan
-        const y = baseY + Math.sin(logF * 2.2 + phase) * amp * (1 - lane * 0.18)
+        const screenT = x / Math.max(W, 1)
+        const edgeFade = 0.68 + Math.sin(Math.PI * screenT) * 0.32
+        const logF = logCenter + (screenT - 0.5) * logSpan
+        const frequency = Math.pow(10, logF)
+        const lane = this._getSignalLaneForFrequency(frequency)
+        const spectrumT = Math.max(0, Math.min(1, (logF - Math.log10(F_MIN)) / LOG_RANGE))
+        const density = 0.9 + Math.pow(spectrumT, 1.45) * 6.2 + zoomT * 2.1
+        const speed = 0.14 + spectrumT * 0.42 + trace * 0.035
+        const lanePull = (lane.y - 0.52) * H * 0.11
+        const amp = Math.max(8, Math.min(34, fieldH * (0.19 - traceT * 0.035))) * (0.88 + spectrumT * 0.28)
+        const carrier = Math.sin(screenT * Math.PI * 2 * density + time * speed + trace * 1.9)
+        const fine = Math.sin(logF * (3.4 + trace) + time * (0.18 + trace * 0.04)) * 0.22
+        const y = baseY + lanePull + traceOffset + (carrier + fine) * amp * edgeFade
         g.lineTo(x, y)
       }
-      g.stroke({ color, alpha: lane === 0 ? 0.55 : 0.28, width: lane === 0 ? 2 : 1 })
+
+      g.stroke({ color: traceColors[trace], alpha: baseAlpha, width: baseWidth })
     }
+  }
+
+  private _getSignalLaneForFrequency(frequency: number) {
+    if (frequency < 20_000) return SPECTRUM_LANE_BY_ID.sound
+    if (frequency >= SPECTRUM_LANE_BY_ID.gamma.frequencyMin) return SPECTRUM_LANE_BY_ID.gamma
+    return SPECTRUM_LANES.find(lane =>
+      lane.id !== 'sound' &&
+      lane.id !== 'gamma' &&
+      frequency >= lane.frequencyMin &&
+      frequency <= lane.frequencyMax
+    ) ?? SPECTRUM_LANE_BY_ID.radio
   }
 
   private _drawBandRay(
@@ -652,39 +742,88 @@ export class SpectrumRenderer {
   ): void {
     if (!detailLayers.pointsOfInterest && !detailLayers.technologies) return
 
-    const occupiedByLane = new Map<string, number>()
     const minSpacing = getEducationalSpacingForDensity(density)
+    const { eduHiddenDomains, eduVerifiedOnly } = useSpectrumStore.getState()
 
+    // Collect the visible pins per lane, then place them greedily left→right.
+    // Pins too close to the last placed one accumulate into a "+N" overflow badge
+    // rather than disappearing silently — the density stays honest, and zooming in
+    // separates them. (The hit-test still reaches each pin individually.)
+    const perLane = new Map<string, { ex: EducationalExample; x: number; y: number }[]>()
     for (const example of EDUCATIONAL_EXAMPLES) {
+      if (!isEduExampleVisible(example, eduHiddenDomains, eduVerifiedOnly)) continue
       const x = freqToScreenX(example.frequency, W, state.centerFrequency, state.zoomLevel)
       if (x < -30 || x > W + 30) continue
-
       const lane = SPECTRUM_LANES.find(item => item.id === example.category)
       if (!lane) continue
-
-      const y = H * lane.y
-      const laneKey = lane.id
-      const lastRight = occupiedByLane.get(laneKey) ?? -Infinity
-      if (x - lastRight < minSpacing) continue
-
-      const g = this.bandPool.pop() ?? new Graphics()
-      g.clear()
-      g.moveTo(x, y - 20).lineTo(x, y - 6).stroke({ color: example.color, alpha: 0.62, width: 1.2 })
-      g.circle(x, y - 21, 3).fill({ color: example.color, alpha: 0.92 })
-      container.addChild(g)
-
-      const label = this.labelPool.pop() ?? new Text({ text: '' })
-      label.text = example.label
-      label.x = x
-      label.y = y - 36
-      label.anchor.set(0.5)
-      label.style.fontSize = 10
-      label.style.fill = example.color
-      label.alpha = 0.86
-      container.addChild(label)
-
-      occupiedByLane.set(laneKey, x + Math.max(70, example.label.length * 6.4))
+      const list = perLane.get(lane.id) ?? []
+      list.push({ ex: example, x, y: H * lane.y })
+      perLane.set(lane.id, list)
     }
+
+    this.eduClusters = [] // republished each frame; read by the canvas hit-test
+    for (const list of perLane.values()) {
+      list.sort((a, b) => a.x - b.x)
+      let lastRight = -Infinity
+      let overflow = 0
+      let anchorX = 0
+      let anchorY = 0
+      let anchorFreq = 0
+      const flush = () => {
+        if (overflow > 0) { this._drawEduCluster(container, anchorX, anchorY, overflow, anchorFreq); overflow = 0 }
+      }
+      for (const p of list) {
+        if (p.x - lastRight < minSpacing) { overflow++; continue }
+        flush() // resolve overflow against the previous anchor before moving on
+        this._drawEduPin(container, p.ex, p.x, p.y)
+        lastRight = p.x + Math.max(70, p.ex.label.length * 6.4)
+        anchorX = p.x
+        anchorY = p.y
+        anchorFreq = p.ex.frequency
+      }
+      flush() // trailing overflow after the last placed pin
+    }
+  }
+
+  private _drawEduPin(container: Container, ex: EducationalExample, x: number, y: number): void {
+    const g = this.bandPool.pop() ?? new Graphics()
+    g.clear()
+    g.moveTo(x, y - 20).lineTo(x, y - 6).stroke({ color: ex.color, alpha: 0.62, width: 1.2 })
+    g.circle(x, y - 21, 3).fill({ color: ex.color, alpha: 0.92 })
+    container.addChild(g)
+
+    const label = this.labelPool.pop() ?? new Text({ text: '' })
+    label.text = ex.label
+    label.x = x
+    label.y = y - 36
+    label.anchor.set(0.5)
+    label.style.fontSize = 10
+    label.style.fill = ex.color
+    label.alpha = 0.86
+    container.addChild(label)
+  }
+
+  private _drawEduCluster(container: Container, x: number, y: number, count: number, centerFreq: number): void {
+    const w = 14 + String(count).length * 6
+    const bx = x + 9
+    const by = y - 21
+    this.eduClusters.push({ bx, by, w, count, centerFreq })
+    const g = this.bandPool.pop() ?? new Graphics()
+    g.clear()
+    g.roundRect(bx, by - 7, w, 14, 7)
+      .fill({ color: 0x14203a, alpha: 0.92 })
+      .stroke({ color: 0x7ab8ff, width: 1, alpha: 0.7 })
+    container.addChild(g)
+
+    const t = this.labelPool.pop() ?? new Text({ text: '' })
+    t.text = `+${count}`
+    t.x = bx + w / 2
+    t.y = by
+    t.anchor.set(0.5)
+    t.style.fontSize = 9
+    t.style.fill = 0x9fc4ff
+    t.alpha = 0.96
+    container.addChild(t)
   }
 
   private _drawProfessionalTechnologies(

@@ -12,6 +12,7 @@ import type {
   SpectrumDetailLayerKey,
   SpectrumDetailLayers,
   SpectrumMode,
+  UniversalVibrationCategory,
 } from '@/types/spectrum'
 
 export const DEFAULT_DETAIL_LAYERS: SpectrumDetailLayers = {
@@ -89,6 +90,13 @@ interface SpectrumStore {
   showApplications: boolean
   showHazards: boolean
 
+  // Educational atlas filters (domain axis + rigour gate)
+  eduHiddenDomains: UniversalVibrationCategory[]
+  eduVerifiedOnly: boolean
+
+  // Cross-component request to open a specific educational story popup (e.g. from search).
+  pendingEduStoryId: string | null
+
   // Unit preference
   displayUnit: 'frequency' | 'wavelength'
 
@@ -112,6 +120,10 @@ interface SpectrumStore {
   setSelectedLane: (lane: SpectrumCategory | null) => void
   toggleLayer: (layer: 'EM' | 'sound' | 'applications' | 'hazards') => void
   toggleDetailLayer: (layer: SpectrumDetailLayerKey) => void
+  toggleEduDomain: (domain: UniversalVibrationCategory) => void
+  toggleEduVerifiedOnly: () => void
+  resetEduFilters: () => void
+  openEducationalStory: (id: string | null) => void
   setMode: (mode: SpectrumMode) => void
   setDetailDensity: (density: SpectrumDetailDensity) => void
   setDisplayUnit: (unit: 'frequency' | 'wavelength') => void
@@ -142,6 +154,9 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       showSound: true,
       showApplications: true,
       showHazards: true,
+      eduHiddenDomains: [],
+      eduVerifiedOnly: false,
+      pendingEduStoryId: null,
       displayUnit: 'frequency',
       probe: null,
       showCursorFrequency: true,
@@ -186,6 +201,16 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
             [layer]: !s.detailLayers[layer],
           },
         })),
+
+      toggleEduDomain: (domain) =>
+        set((s) => ({
+          eduHiddenDomains: s.eduHiddenDomains.includes(domain)
+            ? s.eduHiddenDomains.filter(d => d !== domain)
+            : [...s.eduHiddenDomains, domain],
+        })),
+      toggleEduVerifiedOnly: () => set((s) => ({ eduVerifiedOnly: !s.eduVerifiedOnly })),
+      resetEduFilters: () => set({ eduHiddenDomains: [], eduVerifiedOnly: false }),
+      openEducationalStory: (id) => set({ pendingEduStoryId: id }),
 
       setMode: (mode) =>
         set((s) => ({

@@ -18,7 +18,10 @@ import { FeaturePopup } from '@/components/ui/FeaturePopup'
 import { SpectrumCategoryLegend } from '@/components/ui/SpectrumCategoryLegend'
 import { CanvasContextBadge } from '@/components/ui/CanvasContextBadge'
 import { EducationalPopup } from '@/components/ui/EducationalPopup'
-import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
+import { EDUCATIONAL_EXAMPLES, EDUCATIONAL_EXAMPLE_MAP, isEduExampleVisible } from '@/data/educationalExamples'
+import { getEduParam, setEduParam } from '@/lib/deeplink/urlState'
+import { canvasFontFamily } from '@/lib/pixi/canvasFont'
+import { probeHardwareWebGL } from '@/lib/pixi/webglSupport'
 import type { ZoomState, FrequencyFeature, SpectrumBand } from '@/types/spectrum'
 import type { EducationalExample } from '@/data/educationalExamples'
 
@@ -32,6 +35,8 @@ function SpectrumCanvasFallback({
   selectedBand: SpectrumBand | null
 }) {
   const fallbackCanvasRef = useRef<HTMLCanvasElement>(null)
+  const eduHiddenDomains = useSpectrumStore(s => s.eduHiddenDomains)
+  const eduVerifiedOnly = useSpectrumStore(s => s.eduVerifiedOnly)
 
   useEffect(() => {
     const canvas = fallbackCanvasRef.current
@@ -78,13 +83,42 @@ function SpectrumCanvasFallback({
       if (bw > 36) {
         ctx.globalAlpha = isSelected ? 0.95 : 0.7
         ctx.fillStyle = '#f0f0ff'
-        ctx.font = `${Math.min(11, Math.max(8, bw * 0.12))}px "Space Grotesk", sans-serif`
+        ctx.font = `${Math.min(11, Math.max(8, bw * 0.12))}px ${canvasFontFamily()}`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         const label = band.label.length > bw / 6 ? band.label.slice(0, Math.floor(bw / 6)) + '…' : band.label
         ctx.fillText(label, (left + right) / 2, y)
         ctx.globalAlpha = 1
       }
+    }
+
+    // Educational pins — the flagship layer must survive Safe Mode too.
+    // Small ticks + dots per lane, honouring the same atlas filters as WebGL.
+    const lastRightByLane = new Map<string, number>()
+    for (const ex of EDUCATIONAL_EXAMPLES) {
+      if (!isEduExampleVisible(ex, eduHiddenDomains, eduVerifiedOnly)) continue
+      const lane = SPECTRUM_LANE_BY_ID[ex.category as keyof typeof SPECTRUM_LANE_BY_ID]
+      if (!lane) continue
+      const x = freqToScreenX(ex.frequency, w, zoomState.centerFrequency, zoomState.zoomLevel)
+      if (x < -10 || x > w + 10) continue
+      const lastRight = lastRightByLane.get(lane.id) ?? -Infinity
+      if (x - lastRight < 7) continue
+      lastRightByLane.set(lane.id, x)
+
+      const y = h * lane.y
+      const color = `#${ex.color.toString(16).padStart(6, '0')}`
+      ctx.globalAlpha = 0.75
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.2
+      ctx.beginPath()
+      ctx.moveTo(x, y - trackH / 2 - 2)
+      ctx.lineTo(x, y - trackH / 2 - 10)
+      ctx.stroke()
+      ctx.fillStyle = color
+      ctx.beginPath()
+      ctx.arc(x, y - trackH / 2 - 12, 2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 1
     }
 
     // center guide line
@@ -94,7 +128,7 @@ function SpectrumCanvasFallback({
     ctx.moveTo(w * 0.5, 0)
     ctx.lineTo(w * 0.5, h)
     ctx.stroke()
-  }, [bands, zoomState, selectedBand])
+  }, [bands, zoomState, selectedBand, eduHiddenDomains, eduVerifiedOnly])
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
@@ -112,7 +146,7 @@ function SpectrumCanvasFallback({
 export function SpectrumCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<SpectrumRenderer | null>(null)
-  const [preferFallback, setPreferFallback] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const [isReady, setIsReady] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
   const [reticle, setReticle] = useState<{ x: number; y: number } | null>(null)
@@ -149,6 +183,11 @@ export function SpectrumCanvas() {
   const showApplications = useSpectrumStore(s => s.showApplications)
   const showHazards = useSpectrumStore(s => s.showHazards)
   const detailLayers = useSpectrumStore(s => s.detailLayers)
+  const eduHiddenDomains = useSpectrumStore(s => s.eduHiddenDomains)
+  const eduVerifiedOnly = useSpectrumStore(s => s.eduVerifiedOnly)
+  const pendingEduStoryId = useSpectrumStore(s => s.pendingEduStoryId)
+  const openEducationalStory = useSpectrumStore(s => s.openEducationalStory)
+  const setZoom = useSpectrumStore(s => s.setZoom)
   const displayUnit = useSpectrumStore(s => s.displayUnit)
   const showCursorFrequency = useSpectrumStore(s => s.showCursorFrequency)
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
@@ -170,32 +209,34 @@ export function SpectrumCanvas() {
     )
   }, [activeMode, allBands, detailDensity, detailLayers, zoomState.zoomLevel, showApplications, showEM, showSound])
 
-  // Detect coarse pointer after mount (avoids SSR/client hydration mismatch)
-  useEffect(() => {
-    if (window.matchMedia('(pointer: coarse)').matches) {
-      setPreferFallback(true)
-    }
-  }, [])
-
-  // Init renderer once canvas is mounted
+  // Init renderer once canvas is mounted. Every device (including mobile) attempts
+  // WebGL — modern phones handle PixiJS fine, and the timeout below is the safety
+  // net that drops to the 2D Safe Mode only if init actually stalls or fails.
   useEffect(() => {
     if (!canvasRef.current) return
 
-    // Reliability-first: mobile devices open directly in Safe Mode to avoid WebGL stalls.
-    if (preferFallback) {
+    // Pre-flight: refuse software rendering BEFORE PixiJS runs. On machines where
+    // Chrome only offers SwiftShader, PixiJS init compiles shaders on the CPU and
+    // blocks the main thread so hard that even the watchdog timers below cannot
+    // fire — this synchronous probe is the only reliable escape hatch.
+    const support = probeHardwareWebGL()
+    if (!support.ok) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous capability verdict on mount; must run before any PixiJS work
+      setInitError(`WebGL unavailable: ${support.reason ?? 'unknown'}`)
       setIsReady(false)
-      setInitError('Mobile safe mode enabled')
       return
     }
 
     const renderer = new SpectrumRenderer(canvasRef.current)
     rendererRef.current = renderer
     setInitError(null)
+    // Give WebGL a fair chance (shader compilation can be slow on phones), then
+    // fall back gracefully rather than hanging on the loading skeleton.
     const initTimer = window.setTimeout(() => {
       if (rendererRef.current !== renderer) return
       setInitError('Renderer initialization timed out')
       setIsReady(false)
-    }, 2500)
+    }, 3500)
 
     // Animation callback — keeps store in sync during animated navigation
     renderer.onAnimationFrame = (state: ZoomState) => {
@@ -224,7 +265,7 @@ export function SpectrumCanvas() {
       renderer.destroy()
       rendererRef.current = null
     }
-  }, [preferFallback])
+  }, [retryCount])
 
   // Global watchdog: never stay forever in "INITIALIZING" state.
   useEffect(() => {
@@ -232,14 +273,14 @@ export function SpectrumCanvas() {
     const watchdog = window.setTimeout(() => {
       setInitError('Initialization watchdog fallback')
       setIsReady(false)
-    }, 3500)
+    }, 5000)
     return () => window.clearTimeout(watchdog)
   }, [isReady, initError])
 
   // Push band + state to renderer on every change
   useEffect(() => {
     rendererRef.current?.update(visibleBands, zoomState, visibleFeatures, activeMode, detailDensity, showEM, showApplications, showHazards, detailLayers)
-  }, [visibleBands, visibleFeatures, zoomState, activeMode, detailDensity, showEM, showApplications, showHazards, detailLayers])
+  }, [visibleBands, visibleFeatures, zoomState, activeMode, detailDensity, showEM, showApplications, showHazards, detailLayers, eduHiddenDomains, eduVerifiedOnly])
 
   // Highlight selected band — pass layer flags so highlight skips hidden bands
   useEffect(() => {
@@ -537,26 +578,57 @@ export function SpectrumCanvas() {
   const handleEduNavigate = useCallback(
     (example: EducationalExample) => {
       const targetZoom = Math.max(zoomState.zoomLevel, 5)
-      rendererRef.current?.animateTo(example.frequency, targetZoom, zoomState)
+      // Reliable store-driven jump (the smooth animateTo can under-shoot when kicked
+      // off from an effect/deep-link); centres the pin so the popup lines up.
+      setZoom(example.frequency, targetZoom)
       const lane = SPECTRUM_LANE_BY_ID[example.category as keyof typeof SPECTRUM_LANE_BY_ID]
       const pinY = lane ? height * lane.y - 21 : height * 0.3
       setEduPopup({ example, x: width / 2, y: pinY })
     },
-    [zoomState, width, height]
+    [zoomState, width, height, setZoom]
   )
+
+  // #4 — keep the `?edu=<id>` URL param in sync with the open story popup.
+  // Skip the first run so a deep-linked param isn't wiped before it's read below.
+  const eduSyncSkip = useRef(true)
+  useEffect(() => {
+    if (eduSyncSkip.current) { eduSyncSkip.current = false; return }
+    setEduParam(eduPopup?.example.id ?? null)
+  }, [eduPopup])
+
+  // Open a story on request from elsewhere (e.g. picking an educational search result).
+  useEffect(() => {
+    if (!pendingEduStoryId) return
+    const ex = EDUCATIONAL_EXAMPLE_MAP.get(pendingEduStoryId)
+    openEducationalStory(null)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fulfils a one-shot cross-component request (an educational search pick) after clearing it
+    if (ex) handleEduNavigate(ex)
+  }, [pendingEduStoryId, handleEduNavigate, openEducationalStory])
+
+  // #4 — open a deep-linked story once, after the renderer is ready.
+  const eduDeepLinkDone = useRef(false)
+  useEffect(() => {
+    if (!isReady || eduDeepLinkDone.current) return
+    eduDeepLinkDone.current = true
+    const id = getEduParam()
+    if (!id) return
+    const ex = EDUCATIONAL_EXAMPLE_MAP.get(id)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time open of the deep-linked story after the async renderer is ready
+    if (ex) handleEduNavigate(ex)
+  }, [isReady, handleEduNavigate])
 
   const handleFeatureNavigate = useCallback(
     (feature: FrequencyFeature) => {
       const lane = getFeatureLane(feature, visibleBands)
       const targetZoom = Math.max(zoomState.zoomLevel, Math.max(5, feature.minZoom * 0.85))
-      rendererRef.current?.animateTo(feature.frequency_center, targetZoom, zoomState)
+      setZoom(feature.frequency_center, targetZoom)
       setSelectedFeature(feature.id)
       setSelectedLane(lane.id)
       selectBand(null)
       setEduPopup(null)
       setPopup({ feature, x: width / 2, y: height * lane.y - 16 })
     },
-    [visibleBands, zoomState, width, height, setSelectedFeature, setSelectedLane, selectBand]
+    [visibleBands, zoomState, width, height, setSelectedFeature, setSelectedLane, selectBand, setZoom]
   )
 
   const selectAtPoint = useCallback(
@@ -570,16 +642,34 @@ export function SpectrumCanvas() {
       const rect = canvasRef.current.getBoundingClientRect()
       const x = clientX - rect.left
       const y = clientY - rect.top
+      // #7 — fatter tap targets on touch / coarse-pointer devices.
+      const touchPad = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches ? 10 : 0
+
+      // Educational "+N" overflow badge → zoom in to separate the clustered pins.
+      const clusters = rendererRef.current?.eduClusters
+      if (activeMode === 'educational' && clusters && clusters.length > 0) {
+        const cl = clusters.find(c =>
+          x >= c.bx - touchPad && x <= c.bx + c.w + touchPad && Math.abs(y - c.by) < 9 + touchPad)
+        if (cl) {
+          const targetZoom = Math.min(Math.max(zoomState.zoomLevel * 3, 6), 5000)
+          setZoom(cl.centerFreq, targetZoom)
+          setPopup(null)
+          setEduPopup(null)
+          pointerDownRef.current = null
+          return
+        }
+      }
 
       // Educational pin hit test
       if (activeMode === 'educational' && detailDensity !== 'clean' && showApplications &&
           (detailLayers.pointsOfInterest || detailLayers.technologies)) {
         const eduHit = EDUCATIONAL_EXAMPLES.find(ex => {
+          if (!isEduExampleVisible(ex, eduHiddenDomains, eduVerifiedOnly)) return false
           const lane = SPECTRUM_LANE_BY_ID[ex.category as keyof typeof SPECTRUM_LANE_BY_ID]
           if (!lane) return false
           const pinX = freqToScreenX(ex.frequency, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
           const pinY = rect.height * lane.y - 21
-          return Math.abs(x - pinX) < 12 && Math.abs(y - pinY) < 14
+          return Math.abs(x - pinX) < 12 + touchPad && Math.abs(y - pinY) < 14 + touchPad
         })
         if (eduHit) {
           setPopup(null)
@@ -595,7 +685,7 @@ export function SpectrumCanvas() {
       const featureHit = visibleFeatures.find(feature => {
         const dotX = freqToScreenX(feature.frequency_center, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
         const dotY = rect.height * getFeatureLane(feature, visibleBands).y
-        return Math.abs(x - dotX) < 14 && Math.abs(y - dotY) < 16
+        return Math.abs(x - dotX) < 14 + touchPad && Math.abs(y - dotY) < 16 + touchPad
       })
       if (featureHit) {
         setPopup({ feature: featureHit, x, y })
@@ -628,7 +718,7 @@ export function SpectrumCanvas() {
       }
       pointerDownRef.current = null
     },
-    [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, zoomState, selectBand, setSelectedFeature, setSelectedLane]
+    [activeMode, detailDensity, detailLayers, showApplications, visibleBands, visibleFeatures, zoomState, selectBand, setSelectedFeature, setSelectedLane, eduHiddenDomains, eduVerifiedOnly, setZoom]
   )
 
   const handleClick = useCallback(
@@ -653,7 +743,7 @@ export function SpectrumCanvas() {
   return (
     <div className="relative w-full h-full">
       {/* Phase 18 — Loading skeleton while PixiJS initializes */}
-      {!isReady && !initError && !preferFallback && (
+      {!isReady && !initError && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#02030a]">
           <div className="flex flex-col items-center gap-4">
             <div className="w-64 h-8 rounded-full overflow-hidden relative">
@@ -669,15 +759,21 @@ export function SpectrumCanvas() {
         </div>
       )}
 
-      {(initError || preferFallback) && (
+      {initError && (
         <>
           <SpectrumCanvasFallback
             bands={visibleBands}
             zoomState={zoomState}
             selectedBand={selectedBand}
           />
-          <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 rounded-lg border border-[#74d6ff20] bg-[#0b0d18d0] p-2 text-xs text-[#aebcda]">
-            Lightweight mode · Drag to pan · Pinch to zoom · Tap to select
+          <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-3 rounded-lg border border-[#74d6ff20] bg-[#0b0d18d0] p-2 text-xs text-[#aebcda]">
+            <span>Lightweight mode · drag to pan · pinch to zoom</span>
+            <button
+              onClick={() => { setInitError(null); setIsReady(false); setRetryCount(c => c + 1) }}
+              className="shrink-0 rounded-md border border-[#74d6ff55] bg-[#74d6ff18] px-3 py-1 font-medium text-[#dff7ff] transition-colors hover:bg-[#74d6ff30]"
+            >
+              Try interactive mode ↻
+            </button>
           </div>
         </>
       )}

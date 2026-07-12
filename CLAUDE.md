@@ -7,16 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev      # dev server with Turbopack on :3000
-npm run build    # static export → out/ (production)
-npm run lint     # ESLint
+npm run dev            # dev server with Turbopack on :3000
+npm run build          # static export → out/ (production)
+npm run lint           # ESLint 9 (flat config; baseline is 0 errors, some warnings)
+npm run typecheck      # tsc --noEmit
+npm run test           # Vitest (unit tests for zoom math + educational-data invariants)
+npm run validate:data  # educational-data lane/integrity check
+npm run check:sources  # HTTP-verify every source URL (needs network)
 ```
 
-No test runner configured. Turbopack source maps may show wrong line numbers — trust runtime behavior over what the overlay claims.
+Turbopack source maps may show wrong line numbers — trust runtime behavior over what the overlay claims.
 
 ## What This Is
 
-Interactive EM spectrum visualizer: 26 decades of frequency (1 Hz → 10²⁶ Hz) rendered on a PixiJS WebGL canvas inside a Next.js static export. Users pan/zoom the log-scale spectrum, click bands to see details in a slide-in side panel.
+Interactive EM spectrum visualizer: 40 decades of frequency (10⁻¹⁴ Hz → 10²⁶ Hz) rendered on a PixiJS WebGL canvas inside a Next.js static export. Users pan/zoom the log-scale spectrum, click bands to see details in a slide-in side panel. The axis also carries a bottom "Audio / mechanical" (`sound`) lane for non-EM oscillations that share the frequency axis but not the medium.
 
 **Stack:** Next.js 16.2.4 (App Router, `output: 'export'`), React 19.2.4, PixiJS v8.18.1, Zustand 5.0.12, Framer Motion, Fuse.js (fuzzy search), Tailwind v4.
 
@@ -74,7 +78,7 @@ React calls `renderer.update(bands, state)` which sets `_dirty = true`. The Pixi
 
 ### Log10 frequency math
 `freqToScreenX(freq, W, centerFrequency, zoomLevel)` — all frequency positioning is log10.  
-`logSpan = 26 / zoomLevel` — 26 decades total.  
+`logSpan = LOG_RANGE / zoomLevel`, where `LOG_RANGE = LOG_MAX − LOG_MIN = 26 − (−14) = 40` decades (`F_MIN = 1e-14`, `F_MAX = 1e26`, see `lib/zoom/logMapper.ts`).  
 Never do linear interpolation on raw frequency values.
 
 ### LOD system
@@ -83,9 +87,13 @@ Never do linear interpolation on raw frequency values.
 ### URL state
 `?f=<freq>&z=<zoom>` decoded on mount. Deep links generated in `SidePanel.tsx` `copyDeepLink()`.
 
-## Known Dead Code
+## Data invariants (educational examples)
 
-`lib/pixi/rendererFactory.ts` — no importers, confirmed by graphify. Safe to delete.
+`data/educationalExamples.ts` pins are placed by `category` → lane (see `SpectrumRenderer._drawEducationalPins` and the hit-test in `SpectrumCanvas`). Hard rule: any phenomenon that is **not electromagnetic** (acoustic, seismic, mechanical, orbital/cyclic, bioelectric rhythm) must use `category: 'sound'`, never an EM lane (`radio`…`gamma`) — an acoustic frequency in Hz overlaps the radio ELF band numerically but is a different medium.
+
+`npm run validate:data` (`scripts/validate-educational-data.mjs`) enforces this: it fails on any frequency outside its lane's numeric range and on any non-EM-looking entry still parked on `radio`/`microwave`. Run it after editing that file.
+
+Each entry also carries `confidence` (ScientificConfidence), `atlasCategory` (domain), and `sources[]` (verifiable links, surfaced in the popup). `npm run check:sources` HTTP-checks every source URL — run it after adding or editing sources; a dead link undermines the credibility the sources exist to provide.
 
 ## Graphify
 

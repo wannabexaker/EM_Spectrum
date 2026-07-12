@@ -74,7 +74,57 @@ export function EducationalPopup({ example, x, y, canvasW, canvasH, onClose, onN
         </div>
       </div>
 
+      {(example.confidence || example.atlasCategory) && (
+        <div className="edu-popup-badges">
+          {example.confidence && (
+            <span className="edu-badge" data-confidence={example.confidence} title="Scientific confidence">
+              {example.confidence}
+            </span>
+          )}
+          {example.atlasCategory && (
+            <span className="edu-badge edu-badge-domain" title="Domain">{example.atlasCategory}</span>
+          )}
+        </div>
+      )}
+
+      {example.claims && example.claims.length > 0 && (
+        <div className="edu-popup-claims">
+          <span className="edu-popup-related-label">What&apos;s verified vs not</span>
+          {example.claims.map((c, i) => (
+            <div className="edu-claim" key={i} data-confidence={c.confidence} title={c.confidence}>
+              <span className="edu-claim-dot" />
+              <span className="edu-claim-text">{c.label}</span>
+              <span className="edu-claim-verdict">{c.confidence}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <p className="edu-popup-story">{example.story}</p>
+
+      {example.sources && example.sources.length > 0 && (
+        <div className="edu-popup-sources">
+          <span className="edu-popup-related-label">Sources</span>
+          <div className="edu-popup-source-links">
+            {example.sources.map((s, i) =>
+              s.url ? (
+                <a
+                  key={i}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="edu-source-link"
+                  title={s.note ?? s.url}
+                >
+                  {s.label} ↗
+                </a>
+              ) : (
+                <span key={i} className="edu-source-link edu-source-plain" title={s.note}>{s.label}</span>
+              )
+            )}
+          </div>
+        </div>
+      )}
 
       {related.length > 0 && (
         <div className="edu-popup-related">
