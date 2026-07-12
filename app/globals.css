@@ -1566,7 +1566,21 @@ html, body {
 
 /* Tablet / narrow desktop */
 @media (max-width: 768px) {
-  .spectrum-header { gap: 0.5rem; padding: 0 0.75rem; min-height: 48px; }
+  .spectrum-header { gap: 0.5rem; padding: 0.4rem 0.75rem; min-height: 48px; flex-wrap: wrap; row-gap: 0.4rem; }
+  /* Controls wrap to their own row(s) instead of overflowing and being clipped by
+     .spectrum-layout{overflow:hidden} — keeps every control reachable on phones/tablets.
+     Scrolling isn't an option here: the dropdowns (Atlas filter, density) are children
+     of this nav, so overflow-x would clip them. */
+  .header-controls {
+    margin-left: 0 !important;
+    width: 100%;
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    justify-content: center;
+    row-gap: 0.4rem;
+    overflow: visible;
+  }
+  .header-sep { display: none; }
   .header-logo { font-size: 0.82rem; }
   .density-level-btn { min-width: 44px; height: 27px; font-size: 0.58rem; }
   .region-btn { min-width: 30px; padding-inline: 0.42rem; font-size: 0.58rem; }
@@ -2710,6 +2724,21 @@ html, body {
 .edu-filter-legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .edu-filter-legend-label { font-size: 11px; color: rgba(200, 210, 240, 0.85); flex: 1; }
 .edu-filter-legend-count { font-size: 10px; color: rgba(159, 176, 204, 0.6); }
+
+/* On phones/tablets the wrapped toolbar can place the Atlas trigger anywhere in its
+   row, so a button-anchored panel could overflow off-screen (and get clipped by
+   .spectrum-layout{overflow:hidden}). Anchor it to the viewport bottom-right instead
+   — always fully visible, independent of the wrapped header's height. */
+@media (max-width: 768px) {
+  .edu-filter-panel {
+    position: fixed;
+    inset: auto 12px 12px auto;
+    width: min(320px, calc(100vw - 24px));
+    max-width: none;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
 
 /* ── Onboarding tour ──────────────────────────────────────────────────── */
 .onboard-overlay {

@@ -78,7 +78,7 @@ export function LayerToggle() {
             title={layer.tooltip}
           >
             <span className="layer-dot" />
-            {layer.label}
+            <span className="layer-label">{layer.label}</span>
             {!active && <span className="layer-off-mark" aria-hidden="true">x</span>}
             {toast?.key === layer.key && (
               <span className="layer-toast" role="status">
