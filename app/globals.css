@@ -2731,11 +2731,18 @@ html, body {
    — always fully visible, independent of the wrapped header's height. */
 @media (max-width: 768px) {
   .edu-filter-panel {
+    /* .spectrum-header has backdrop-filter, which makes it the containing block for
+       this position:fixed panel — so 100% == header height. Anchor just below the
+       (wrapped) header, spanning toward the right edge; always fully on-screen no
+       matter where the Atlas trigger wrapped to. */
     position: fixed;
-    inset: auto 12px 12px auto;
+    top: calc(100% + 6px);
+    right: 12px;
+    left: auto;
+    bottom: auto;
     width: min(320px, calc(100vw - 24px));
     max-width: none;
-    max-height: 70vh;
+    max-height: calc(100dvh - 100% - 20px);
     overflow-y: auto;
   }
 }
