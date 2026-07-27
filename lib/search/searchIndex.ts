@@ -2,16 +2,28 @@ import Fuse from 'fuse.js'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { EDUCATIONAL_EXAMPLES, type EducationalExample } from '@/data/educationalExamples'
 import { ATLAS_CATEGORY_LABELS } from '@/data/universalVibrationsAtlas'
+import {
+  PROFESSIONAL_SUB_BANDS,
+  PROFESSIONAL_TECH_OVERLAYS,
+  type ProfessionalBand,
+  type ProfessionalTechnology,
+} from '@/data/professionalSpectrum'
 import type { FrequencyFeature, SpectrumBand, TechnologyOverlay } from '@/types/spectrum'
 import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
 
 export interface SearchResult {
-  type: 'band' | 'technology' | 'atlas' | 'educational'
+  type: 'band' | 'technology' | 'atlas' | 'educational' | 'pro-band' | 'pro-tech'
   label: string
   sublabel: string
   targetFrequency: number
   targetZoom: number
-  data: SpectrumBand | FrequencyFeature | TechnologyOverlay | EducationalExample
+  data:
+    | SpectrumBand
+    | FrequencyFeature
+    | TechnologyOverlay
+    | EducationalExample
+    | ProfessionalBand
+    | ProfessionalTechnology
 }
 
 export interface SearchOptions {
@@ -28,6 +40,8 @@ interface FrequencyQueryCandidate {
 let fuseIndex: Fuse<SpectrumBand> | null = null
 let featureFuseIndex: Fuse<FrequencyFeature> | null = null
 let educationalFuseIndex: Fuse<EducationalExample> | null = null
+let proBandFuseIndex: Fuse<ProfessionalBand> | null = null
+let proTechFuseIndex: Fuse<ProfessionalTechnology> | null = null
 
 export function buildSearchIndex(bands: SpectrumBand[]): void {
   fuseIndex = new Fuse(bands, {
@@ -74,6 +88,32 @@ export function buildEducationalSearchIndex(): void {
   })
 }
 
+/** ITU sub-bands and technology allocations shown in professional mode. Without these
+ *  the whole professional dataset was unsearchable — "ELF", "WiGig" or "5G" returned
+ *  nothing from the very layers professional mode draws. */
+export function buildProfessionalSearchIndex(): void {
+  proBandFuseIndex = new Fuse(PROFESSIONAL_SUB_BANDS, {
+    keys: [
+      { name: 'label', weight: 0.4 },
+      { name: 'rangeLabel', weight: 0.2 },
+      { name: 'uses', weight: 0.28 },
+      { name: 'standard', weight: 0.12 },
+    ],
+    threshold: 0.34,
+    includeScore: true,
+  })
+  proTechFuseIndex = new Fuse(PROFESSIONAL_TECH_OVERLAYS, {
+    keys: [
+      { name: 'label', weight: 0.42 },
+      { name: 'detail', weight: 0.3 },
+      { name: 'standard', weight: 0.16 },
+      { name: 'category', weight: 0.12 },
+    ],
+    threshold: 0.34,
+    includeScore: true,
+  })
+}
+
 export function search(query: string, bands: SpectrumBand[], options: SearchOptions = {}): SearchResult[] {
   if (!query.trim()) return []
 
@@ -98,6 +138,7 @@ export function search(query: string, bands: SpectrumBand[], options: SearchOpti
   if (!fuseIndex) buildSearchIndex(bands)
   if (!featureFuseIndex) buildFeatureSearchIndex()
   if (!educationalFuseIndex) buildEducationalSearchIndex()
+  if (!proBandFuseIndex || !proTechFuseIndex) buildProfessionalSearchIndex()
 
   // Score-ranked merge across all three indexes so the most relevant match wins
   // regardless of type. A query like "MRI" should surface the MRI story, not be
@@ -109,6 +150,34 @@ export function search(query: string, bands: SpectrumBand[], options: SearchOpti
   }
   for (const { item, score } of educationalFuseIndex!.search(query)) {
     scored.push({ result: _educationalResult(item), score: score ?? 1, typeRank: 0 })
+  }
+  for (const { item, score } of proTechFuseIndex!.search(query)) {
+    scored.push({
+      result: {
+        type: 'pro-tech' as const,
+        label: item.label,
+        sublabel: item.standard ?? item.detail,
+        targetFrequency: item.frequency,
+        targetZoom: Math.max(item.minZoom, 12),
+        data: item,
+      },
+      score: score ?? 1,
+      typeRank: 1,
+    })
+  }
+  for (const { item, score } of proBandFuseIndex!.search(query)) {
+    scored.push({
+      result: {
+        type: 'pro-band' as const,
+        label: `${item.label} (ITU)`,
+        sublabel: `${item.rangeLabel} · ${item.uses}`,
+        targetFrequency: Math.sqrt(item.frequencyMin * item.frequencyMax),
+        targetZoom: 8,
+        data: item,
+      },
+      score: score ?? 1,
+      typeRank: 2,
+    })
   }
   for (const { item, score } of fuseIndex!.search(query)) {
     scored.push({
@@ -138,7 +207,11 @@ export function search(query: string, bands: SpectrumBand[], options: SearchOpti
   }
 
   const visibleResults = options.rfOnly
-    ? merged.filter(result => result.type === 'band' || result.type === 'technology')
+    ? merged.filter(result =>
+        result.type === 'band' ||
+        result.type === 'technology' ||
+        result.type === 'pro-band' ||
+        result.type === 'pro-tech')
     : merged
 
   return visibleResults.slice(0, 14)

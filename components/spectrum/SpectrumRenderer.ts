@@ -7,7 +7,7 @@ import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
-import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
+import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalTechnology } from '@/data/professionalSpectrum'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { EDUCATIONAL_EXAMPLES, isEduExampleVisible, type EducationalExample } from '@/data/educationalExamples'
 import { useSpectrumStore } from '@/store/spectrumStore'
@@ -18,6 +18,15 @@ import {
   getProfessionalVisibilityThresholdForDensity,
   getProfessionalZoomBoostForDensity,
 } from '@/lib/spectrum/detailDensityProfiles'
+
+/** Screen-space box of a "+N" overflow badge, consumed by the canvas hit-test. */
+export interface ClusterBadge {
+  bx: number
+  by: number
+  w: number
+  count: number
+  centerFreq: number
+}
 
 const POOL_SIZE = 600
 const TRACK_H_RATIO = 0.07      // track height as fraction of canvas height
@@ -57,7 +66,14 @@ export class SpectrumRenderer {
   onAnimationFrame?: (state: ZoomState) => void
   /** Screen-space geometry of the "+N" overflow badges, republished each frame so
    *  the canvas hit-test can make them clickable (zoom-to-expand). */
-  eduClusters: Array<{ bx: number; by: number; w: number; count: number; centerFreq: number }> = []
+  eduClusters: ClusterBadge[] = []
+  /** Same, for professional mode: collapsed tech overlays and stacked feature pins.
+   *  Kept separate from eduClusters so each mode's hit-test only sees its own badges. */
+  proClusters: ClusterBadge[] = []
+  /** The professional tech-overlay diamonds actually drawn this frame, so the canvas
+   *  hit-test can open a detail panel for exactly what is on screen (previously these
+   *  markers were purely decorative — drawn but unclickable). */
+  proMarkers: Array<{ x: number; y: number; tech: ProfessionalTechnology }> = []
 
   // Pending data from React — ticker reads these
   private _pendingBands: SpectrumBand[] = []
@@ -335,6 +351,11 @@ export class SpectrumRenderer {
       container.addChild(g)
     }
 
+    // Republished every frame — the canvas hit-test reads these to make what is
+    // actually on screen clickable (badges zoom in, markers open a detail panel).
+    this.proClusters = []
+    this.proMarkers = []
+
     if (mode === 'professional' && showEM) {
       this._drawProfessionalSubBands(container, state, W, H)
     }
@@ -566,6 +587,9 @@ export class SpectrumRenderer {
   ): void {
     const zoomBoost = getFeatureZoomBoostForDensity(density, mode)
     const lastLabelRightByLane = new Map<string, number>()
+    // Positions of the pins we actually draw, so professional mode can report stacked
+    // density with a "+N" badge (the pins themselves all stay drawn and clickable).
+    const drawnByLane = new Map<string, { x: number; y: number; freq: number }[]>()
     const minLabelSpacing = density === 'max' ? 44 : density === 'details' ? 58 : 78
     const alwaysShowFrequencyLabels = density !== 'clean'
     const minLabelVisibility = density === 'max' ? 0.12 : density === 'details' ? 0.16 : 0.2
@@ -665,6 +689,12 @@ export class SpectrumRenderer {
 
       container.addChild(marker)
 
+      {
+        const list = drawnByLane.get(lane.id) ?? []
+        list.push({ x, y: pinTopY, freq: feature.frequency_center })
+        drawnByLane.set(lane.id, list)
+      }
+
       if (!alwaysShowFrequencyLabels && !isActive) continue
 
       const laneId = lane.id
@@ -687,6 +717,31 @@ export class SpectrumRenderer {
 
       const labelWidth = frequencyLabel.width
       lastLabelRightByLane.set(laneId, x + labelWidth / 2)
+    }
+
+    // Professional mode: report stacked pin density with the same "+N" badge the
+    // educational lane uses. Educational mode already badges its own pins, so a second
+    // badge family there would be noise rather than information.
+    if (mode === 'professional') {
+      for (const list of drawnByLane.values()) {
+        list.sort((a, b) => a.x - b.x)
+        let lastX = -Infinity
+        let overflow = 0
+        let anchor: { x: number; y: number; freq: number } | null = null
+        const flush = () => {
+          if (overflow > 0 && anchor) {
+            this._drawClusterBadge(container, anchor.x, anchor.y, overflow, anchor.freq, this.proClusters)
+            overflow = 0
+          }
+        }
+        for (const p of list) {
+          if (p.x - lastX < minLabelSpacing) { overflow++; continue }
+          flush()
+          lastX = p.x
+          anchor = p
+        }
+        flush()
+      }
     }
   }
 
@@ -770,7 +825,7 @@ export class SpectrumRenderer {
       let anchorY = 0
       let anchorFreq = 0
       const flush = () => {
-        if (overflow > 0) { this._drawEduCluster(container, anchorX, anchorY, overflow, anchorFreq); overflow = 0 }
+        if (overflow > 0) { this._drawClusterBadge(container, anchorX, anchorY - 21, overflow, anchorFreq, this.eduClusters); overflow = 0 }
       }
       for (const p of list) {
         if (p.x - lastRight < minSpacing) { overflow++; continue }
@@ -803,11 +858,20 @@ export class SpectrumRenderer {
     container.addChild(label)
   }
 
-  private _drawEduCluster(container: Container, x: number, y: number, count: number, centerFreq: number): void {
+  /** Draws a "+N" badge next to `x` at absolute `badgeY`, and records its box in `sink`
+   *  so the hit-test can zoom-to-expand. Shared by every layer that collapses overlap. */
+  private _drawClusterBadge(
+    container: Container,
+    x: number,
+    badgeY: number,
+    count: number,
+    centerFreq: number,
+    sink: ClusterBadge[]
+  ): void {
     const w = 14 + String(count).length * 6
     const bx = x + 9
-    const by = y - 21
-    this.eduClusters.push({ bx, by, w, count, centerFreq })
+    const by = badgeY
+    sink.push({ bx, by, w, count, centerFreq })
     const g = this.bandPool.pop() ?? new Graphics()
     g.clear()
     g.roundRect(bx, by - 7, w, 14, 7)
@@ -836,11 +900,15 @@ export class SpectrumRenderer {
   ): void {
     if (!detailLayers.technologies) return
 
-    const occupiedByLane = new Map<string, number>()
     const zoomBoost = getProfessionalZoomBoostForDensity(density)
-    const minLabelSpacing = getProfessionalLabelSpacingForDensity(density)
+    const minSpacing = getProfessionalLabelSpacingForDensity(density)
     const minVisibilityForLabel = getProfessionalVisibilityThresholdForDensity(density)
 
+    // Collect what is in view per lane, then place greedily left→right. Overlapping
+    // overlays collapse into a clickable "+N" badge instead of stacking diamonds with
+    // silently-dropped labels — the same honest-density contract the educational lane
+    // already had, which is what professional mode was missing.
+    const perLane = new Map<string, { tech: ProfessionalTechnology; x: number; y: number; visibility: number }[]>()
     for (const tech of PROFESSIONAL_TECH_OVERLAYS) {
       const effectiveMinZoom = Math.max(1, tech.minZoom * zoomBoost)
       const zoomFade = Math.max(0, Math.min(1, (state.zoomLevel - effectiveMinZoom * 0.72) / (effectiveMinZoom * 0.36)))
@@ -853,7 +921,50 @@ export class SpectrumRenderer {
       const lane = SPECTRUM_LANES.find(item => item.id === tech.category)
       if (!lane) continue
 
-      const y = H * lane.y
+      const list = perLane.get(lane.id) ?? []
+      list.push({ tech, x, y: H * lane.y, visibility })
+      perLane.set(lane.id, list)
+    }
+
+    for (const list of perLane.values()) {
+      list.sort((a, b) => a.x - b.x)
+      let lastRight = -Infinity
+      let overflow = 0
+      let anchorX = 0
+      let anchorY = 0
+      let anchorFreq = 0
+      const flush = () => {
+        if (overflow > 0) {
+          this._drawClusterBadge(container, anchorX, anchorY - 26, overflow, anchorFreq, this.proClusters)
+          overflow = 0
+        }
+      }
+      for (const p of list) {
+        if (p.x - lastRight < minSpacing) { overflow++; continue }
+        flush() // resolve overflow against the previous anchor before moving on
+        this._drawTechOverlay(container, p.tech, p.x, p.y, p.visibility, state, W, p.visibility >= minVisibilityForLabel)
+        // Only markers actually drawn become clickable — what you see is what you can open.
+        this.proMarkers.push({ x: p.x, y: p.y, tech: p.tech })
+        lastRight = p.x + Math.max(72, p.tech.label.length * 5.8)
+        anchorX = p.x
+        anchorY = p.y
+        anchorFreq = p.tech.frequency
+      }
+      flush() // trailing overflow after the last placed marker
+    }
+  }
+
+  private _drawTechOverlay(
+    container: Container,
+    tech: ProfessionalTechnology,
+    x: number,
+    y: number,
+    visibility: number,
+    state: ZoomState,
+    W: number,
+    showLabel: boolean
+  ): void {
+    {
       const color = this._hexToPixi(tech.color)
       const g = this.bandPool.pop() ?? new Graphics()
       g.clear()
@@ -898,8 +1009,7 @@ export class SpectrumRenderer {
 
       container.addChild(g)
 
-      const lastRight = occupiedByLane.get(tech.category) ?? -Infinity
-      if (visibility < minVisibilityForLabel || x - lastRight < minLabelSpacing) continue
+      if (!showLabel) return
 
       const label = this.labelPool.pop() ?? new Text({ text: '' })
       label.text = tech.label
@@ -910,7 +1020,6 @@ export class SpectrumRenderer {
       label.style.fill = color
       label.alpha = Math.min(0.9, visibility)
       container.addChild(label)
-      occupiedByLane.set(tech.category, x + Math.max(72, tech.label.length * 5.8))
     }
   }
 

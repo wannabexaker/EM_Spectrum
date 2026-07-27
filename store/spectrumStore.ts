@@ -96,6 +96,10 @@ interface SpectrumStore {
 
   // Cross-component request to open a specific educational story popup (e.g. from search).
   pendingEduStoryId: string | null
+  // Same, for RF/atlas feature cards and professional markers (ITU sub-bands, tech
+  // allocations) — search picks used to only re-centre without opening anything.
+  pendingFeatureId: string | null
+  pendingProId: string | null
 
   // Unit preference
   displayUnit: 'frequency' | 'wavelength'
@@ -124,6 +128,8 @@ interface SpectrumStore {
   toggleEduVerifiedOnly: () => void
   resetEduFilters: () => void
   openEducationalStory: (id: string | null) => void
+  openFeatureCard: (id: string | null) => void
+  openProCard: (id: string | null) => void
   setMode: (mode: SpectrumMode) => void
   setDetailDensity: (density: SpectrumDetailDensity) => void
   setDisplayUnit: (unit: 'frequency' | 'wavelength') => void
@@ -157,6 +163,8 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       eduHiddenDomains: [],
       eduVerifiedOnly: false,
       pendingEduStoryId: null,
+      pendingFeatureId: null,
+      pendingProId: null,
       displayUnit: 'frequency',
       probe: null,
       showCursorFrequency: true,
@@ -211,6 +219,8 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       toggleEduVerifiedOnly: () => set((s) => ({ eduVerifiedOnly: !s.eduVerifiedOnly })),
       resetEduFilters: () => set({ eduHiddenDomains: [], eduVerifiedOnly: false }),
       openEducationalStory: (id) => set({ pendingEduStoryId: id }),
+      openFeatureCard: (id) => set({ pendingFeatureId: id }),
+      openProCard: (id) => set({ pendingProId: id }),
 
       setMode: (mode) =>
         set((s) => ({

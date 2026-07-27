@@ -1,4 +1,11 @@
-import type { SpectrumCategory } from '@/types/spectrum'
+import type { ScientificConfidence, SpectrumCategory } from '@/types/spectrum'
+
+/** Verifiable reference for a professional allocation (ITU-R, FCC, ETSI, 3GPP…). */
+export interface ProfessionalSource {
+  label: string
+  url?: string
+  note?: string
+}
 
 export interface ProfessionalBand {
   id: string
@@ -9,6 +16,10 @@ export interface ProfessionalBand {
   category: SpectrumCategory
   color: string
   uses: string
+  /** Governing document, e.g. "ITU-R V.431" — surfaced as a tag in the detail panel. */
+  standard?: string
+  confidence?: ScientificConfidence
+  sources?: ProfessionalSource[]
 }
 
 export interface ProfessionalTechnology {
@@ -20,6 +31,10 @@ export interface ProfessionalTechnology {
   color: string
   minZoom: number
   detail: string
+  /** Governing standard, e.g. "IEEE 802.11ax" / "3GPP TS 38.104". */
+  standard?: string
+  confidence?: ScientificConfidence
+  sources?: ProfessionalSource[]
 }
 
 export const PROFESSIONAL_SUB_BANDS: ProfessionalBand[] = [

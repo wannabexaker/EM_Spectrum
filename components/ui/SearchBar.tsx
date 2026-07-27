@@ -102,7 +102,7 @@ function resultTextPriority(result: SearchResult, query: string): number {
   const sublabel = normalizeSearchText(result.sublabel)
   const texts = [label, sublabel]
 
-  if (result.type !== 'band' && result.type !== 'educational') {
+  if (isFeatureResult(result)) {
     const feature = result.data as FrequencyFeature
     texts.push(
       normalizeSearchText(feature.shortLabel),
@@ -131,16 +131,27 @@ function resultTextPriority(result: SearchResult, query: string): number {
   return 44
 }
 
+/** True only for result types whose `data` really is a FrequencyFeature. Bands,
+ *  educational stories and professional allocations have different shapes, so casting
+ *  them to a feature would read undefined fields. */
+function isFeatureResult(result: SearchResult): boolean {
+  return result.type === 'technology' || result.type === 'atlas'
+}
+
 function resultTypePriority(result: SearchResult, numericQuery: boolean, searchScope: SearchScope): number {
   if (numericQuery) {
     if (result.type === 'technology') return 0
+    if (result.type === 'pro-tech') return 12
     if (result.type === 'band') return 18
+    if (result.type === 'pro-band') return 22
     if (result.type === 'educational') return 46
     return searchScope === 'rf' ? 80 : 38
   }
 
   if (result.type === 'technology') return 0
+  if (result.type === 'pro-tech') return searchScope === 'rf' ? 6 : 14
   if (result.type === 'band') return searchScope === 'rf' ? 10 : 18
+  if (result.type === 'pro-band') return searchScope === 'rf' ? 12 : 20
   if (result.type === 'educational') return 24
   return 30
 }
@@ -149,6 +160,7 @@ function densityTieBreak(result: SearchResult, density: SpectrumDetailDensity): 
   if (density === 'max') return 0
   if (result.type === 'band') return density === 'clean' ? 8 : 4
   if (result.type === 'educational') return density === 'clean' ? 12 : 6
+  if (!isFeatureResult(result)) return density === 'clean' ? 6 : 3
   const feature = result.data as FrequencyFeature
   if (feature.curatedRelations?.length) return -5
   if (feature.confidence === 'Scientifically Verified') return -3
@@ -243,6 +255,10 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   const toggleLayer = useSpectrumStore(s => s.toggleLayer)
   const toggleDetailLayer = useSpectrumStore(s => s.toggleDetailLayer)
   const openEducationalStory = useSpectrumStore(s => s.openEducationalStory)
+  const openFeatureCard = useSpectrumStore(s => s.openFeatureCard)
+  const openProCard = useSpectrumStore(s => s.openProCard)
+  const activeMode = useSpectrumStore(s => s.activeMode)
+  const setMode = useSpectrumStore(s => s.setMode)
   const selectedFeature = useMemo(
     () => (selectedFeatureId ? FEATURE_BY_ID.get(selectedFeatureId) : null),
     [selectedFeatureId]
@@ -293,14 +309,14 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
     const modulationFiltered = modulationFacet === 'All'
       ? merged
       : merged.filter(result => {
-          if (result.type === 'band' || result.type === 'educational') return false
+          if (!isFeatureResult(result)) return false
           const feature = result.data as FrequencyFeature
           return (feature.modulationTypes ?? []).some(mod => mod.toLowerCase().includes(modulationFacet.toLowerCase()))
         })
     const filtered = signalClassFacet === 'All'
       ? modulationFiltered
       : modulationFiltered.filter(result => {
-          if (result.type === 'band' || result.type === 'educational') return false
+          if (!isFeatureResult(result)) return false
           const feature = result.data as FrequencyFeature
           return modulationSignalClass(feature.modulationTypes) === signalClassFacet
         })
@@ -416,6 +432,14 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         selectBand(null)
         // Open the story popup + animate to it (handled in SpectrumCanvas).
         openEducationalStory(result.data.id)
+      } else if (result.type === 'pro-band' || result.type === 'pro-tech') {
+        // Professional allocations only exist in professional mode — switch to it,
+        // make sure the layer that draws them is on, then open the detail panel.
+        if (activeMode !== 'professional') setMode('professional')
+        if (result.type === 'pro-band' && !showEM) toggleLayer('EM')
+        if (result.type === 'pro-tech' && !showApplications) toggleLayer('applications')
+        selectBand(null)
+        openProCard(result.data.id)
       } else {
         const feature = result.data as FrequencyFeature
         if (!showApplications) toggleLayer('applications')
@@ -425,6 +449,9 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         setDetailDensity('details')
         setSelectedFeature(feature.id)
         selectBand(null)
+        // Also open the feature card — picking an RF result used to only re-centre and
+        // highlight the pin, while educational picks opened a full panel.
+        openFeatureCard(feature.id)
       }
       setQuery('')
       setShowAdvancedFilters(false)
@@ -432,7 +459,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
       setSignalClassFacet('All')
       setOpen(false)
     },
-    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect, openEducationalStory]
+    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect, openEducationalStory, openFeatureCard, openProCard, activeMode, setMode]
   )
 
   const getResultGroup = (result: SearchResult) => {
@@ -441,6 +468,8 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
 
     if (result.type === 'band') return 'Bands'
     if (result.type === 'educational') return 'Educational Stories'
+    if (result.type === 'pro-band') return 'ITU Sub-bands'
+    if (result.type === 'pro-tech') return 'Allocations'
     const feature = result.data as FrequencyFeature
     if (feature.atlasCategory) return ATLAS_CATEGORY_LABELS[feature.atlasCategory]
     const layers = classifyFeature(feature)
@@ -462,6 +491,9 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
 
     if (result.type === 'educational') return null
 
+    if (result.type === 'pro-band') return showEM ? null : 'EM hidden'
+    if (result.type === 'pro-tech') return showApplications ? null : 'Applications hidden'
+
     const feature = result.data as FrequencyFeature
     if (!showApplications) return 'Applications hidden'
     const disabled = disabledDetailLayersForFeature(feature, detailLayers)
@@ -470,7 +502,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
   }
 
   const getModulationHint = (result: SearchResult): string | null => {
-    if (result.type === 'band' || result.type === 'educational') return null
+    if (!isFeatureResult(result)) return null
     const feature = result.data as FrequencyFeature
     if (!feature.modulationTypes || feature.modulationTypes.length === 0) return null
     return feature.modulationTypes.slice(0, 2).join(', ')

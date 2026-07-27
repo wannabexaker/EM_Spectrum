@@ -7,7 +7,7 @@ import { useSpectrumData } from '@/hooks/useSpectrumData'
 import { useViewport } from '@/hooks/useViewport'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
-import { findNearestTechnology, findProfessionalBand } from '@/data/professionalSpectrum'
+import { findNearestTechnology, findProfessionalBand, PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
 import { getBandLane, getFeatureLane, SPECTRUM_LANES, SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
@@ -18,6 +18,7 @@ import { FeaturePopup } from '@/components/ui/FeaturePopup'
 import { SpectrumCategoryLegend } from '@/components/ui/SpectrumCategoryLegend'
 import { CanvasContextBadge } from '@/components/ui/CanvasContextBadge'
 import { EducationalPopup } from '@/components/ui/EducationalPopup'
+import { ProInfoPopup, type ProTarget } from '@/components/ui/ProInfoPopup'
 import { EDUCATIONAL_EXAMPLES, EDUCATIONAL_EXAMPLE_MAP, isEduExampleVisible } from '@/data/educationalExamples'
 import { getEduParam, setEduParam } from '@/lib/deeplink/urlState'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
@@ -152,6 +153,7 @@ export function SpectrumCanvas() {
   const [reticle, setReticle] = useState<{ x: number; y: number } | null>(null)
   const [popup, setPopup] = useState<{ feature: FrequencyFeature; x: number; y: number } | null>(null)
   const [eduPopup, setEduPopup] = useState<{ example: EducationalExample; x: number; y: number } | null>(null)
+  const [proPopup, setProPopup] = useState<{ target: ProTarget; x: number; y: number } | null>(null)
 
   const {
     zoomState,
@@ -187,6 +189,10 @@ export function SpectrumCanvas() {
   const eduVerifiedOnly = useSpectrumStore(s => s.eduVerifiedOnly)
   const pendingEduStoryId = useSpectrumStore(s => s.pendingEduStoryId)
   const openEducationalStory = useSpectrumStore(s => s.openEducationalStory)
+  const pendingFeatureId = useSpectrumStore(s => s.pendingFeatureId)
+  const openFeatureCard = useSpectrumStore(s => s.openFeatureCard)
+  const pendingProId = useSpectrumStore(s => s.pendingProId)
+  const openProCard = useSpectrumStore(s => s.openProCard)
   const setZoom = useSpectrumStore(s => s.setZoom)
   const displayUnit = useSpectrumStore(s => s.displayUnit)
   const showCursorFrequency = useSpectrumStore(s => s.showCursorFrequency)
@@ -626,10 +632,40 @@ export function SpectrumCanvas() {
       setSelectedLane(lane.id)
       selectBand(null)
       setEduPopup(null)
+      setProPopup(null)
       setPopup({ feature, x: width / 2, y: height * lane.y - 16 })
     },
     [visibleBands, zoomState, width, height, setSelectedFeature, setSelectedLane, selectBand, setZoom]
   )
+
+  // Open an RF/atlas feature card on request (e.g. picking a technology search result).
+  useEffect(() => {
+    if (!pendingFeatureId) return
+    const feature = frequencyFeatures.find(f => f.id === pendingFeatureId)
+    openFeatureCard(null)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fulfils a one-shot cross-component request (an RF search pick) after clearing it
+    if (feature) handleFeatureNavigate(feature)
+  }, [pendingFeatureId, handleFeatureNavigate, openFeatureCard])
+
+  // Open a professional allocation card on request (ITU sub-band or technology overlay).
+  useEffect(() => {
+    if (!pendingProId) return
+    const tech = PROFESSIONAL_TECH_OVERLAYS.find(t => t.id === pendingProId)
+    const band = tech ? undefined : PROFESSIONAL_SUB_BANDS.find(b => b.id === pendingProId)
+    openProCard(null)
+    if (!tech && !band) return
+    const target: ProTarget = tech ? { kind: 'tech', tech } : { kind: 'band', band: band! }
+    const category = tech ? tech.category : band!.category
+    const frequency = tech ? tech.frequency : Math.sqrt(band!.frequencyMin * band!.frequencyMax)
+    const laneY = SPECTRUM_LANE_BY_ID[category as keyof typeof SPECTRUM_LANE_BY_ID]?.y ?? 0.4
+    setZoom(frequency, tech ? Math.max(tech.minZoom, 12) : 8)
+    /* eslint-disable react-hooks/set-state-in-effect -- fulfils a one-shot cross-component
+       request (a professional search pick) which is cleared above before any state is set */
+    setPopup(null)
+    setEduPopup(null)
+    setProPopup({ target, x: width / 2, y: height * laneY })
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [pendingProId, openProCard, setZoom, width, height])
 
   const selectAtPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -645,9 +681,13 @@ export function SpectrumCanvas() {
       // #7 — fatter tap targets on touch / coarse-pointer devices.
       const touchPad = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches ? 10 : 0
 
-      // Educational "+N" overflow badge → zoom in to separate the clustered pins.
-      const clusters = rendererRef.current?.eduClusters
-      if (activeMode === 'educational' && clusters && clusters.length > 0) {
+      // "+N" overflow badge → zoom in to separate whatever collapsed underneath it.
+      // Educational badges come from story pins; professional badges from collapsed tech
+      // overlays and stacked feature pins.
+      const clusters = activeMode === 'educational'
+        ? rendererRef.current?.eduClusters
+        : rendererRef.current?.proClusters
+      if (clusters && clusters.length > 0) {
         const cl = clusters.find(c =>
           x >= c.bx - touchPad && x <= c.bx + c.w + touchPad && Math.abs(y - c.by) < 9 + touchPad)
         if (cl) {
@@ -655,6 +695,24 @@ export function SpectrumCanvas() {
           setZoom(cl.centerFreq, targetZoom)
           setPopup(null)
           setEduPopup(null)
+          setProPopup(null)
+          pointerDownRef.current = null
+          return
+        }
+      }
+
+      // Professional tech-overlay diamond → detail panel. Only markers the renderer
+      // actually drew this frame are hit-tested, so a click always matches what is on
+      // screen (these markers used to be decorative and unreachable).
+      if (activeMode === 'professional') {
+        const techHit = rendererRef.current?.proMarkers.find(m =>
+          Math.abs(x - m.x) < 11 + touchPad && Math.abs(y - (m.y - 26)) < 12 + touchPad)
+        if (techHit) {
+          setPopup(null)
+          setEduPopup(null)
+          setProPopup({ target: { kind: 'tech', tech: techHit.tech }, x, y })
+          setSelectedFeature(null)
+          setSelectedLane(techHit.tech.category)
           pointerDownRef.current = null
           return
         }
@@ -695,11 +753,30 @@ export function SpectrumCanvas() {
         return
       }
 
+      const clickFreq = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+
+      // Professional ITU sub-band bracket, drawn just below the lane centre → detail panel.
+      // Deliberately a narrow y-window so it can't steal ordinary band-track clicks.
+      if (activeMode === 'professional') {
+        const bracketLane = SPECTRUM_LANES.find(l => Math.abs(y - (rect.height * l.y + 15)) < 8 + touchPad)
+        const subBand = bracketLane
+          ? PROFESSIONAL_SUB_BANDS.find(b =>
+              b.category === bracketLane.id && clickFreq >= b.frequencyMin && clickFreq <= b.frequencyMax)
+          : undefined
+        if (subBand) {
+          setPopup(null)
+          setEduPopup(null)
+          setProPopup({ target: { kind: 'band', band: subBand }, x, y })
+          pointerDownRef.current = null
+          return
+        }
+      }
+
       // Band click — check frequency (x) AND lane y so clicks on the Sound
       // track don't accidentally select a Radio band at the same frequency
       setPopup(null)
       setEduPopup(null)
-      const clickFreq = screenXToFreq(x, rect.width, zoomState.centerFrequency, zoomState.zoomLevel)
+      setProPopup(null)
       const laneTolerance = activeMode === 'professional' ? 0.042 : 0.07
       const bandHit = visibleBands.find(b => {
         if (clickFreq < b.frequency_min || clickFreq > b.frequency_max) return false
@@ -864,6 +941,22 @@ export function SpectrumCanvas() {
           canvasH={height}
           onClose={() => { setEduPopup(null); setSelectedFeature(null); setSelectedLane(null) }}
           onNavigate={handleEduNavigate}
+        />
+      )}
+
+      {/* Professional marker popup (ITU sub-bands + technology allocations) */}
+      {proPopup && (
+        <ProInfoPopup
+          target={proPopup.target}
+          x={proPopup.x}
+          y={proPopup.y}
+          canvasW={width}
+          canvasH={height}
+          onClose={() => { setProPopup(null); setSelectedLane(null) }}
+          onZoom={(frequency) => {
+            setZoom(frequency, Math.min(Math.max(zoomState.zoomLevel * 3, 12), 5000))
+            setProPopup(null)
+          }}
         />
       )}
     </div>
