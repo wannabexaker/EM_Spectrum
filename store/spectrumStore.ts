@@ -27,6 +27,7 @@ export const DEFAULT_DETAIL_LAYERS: SpectrumDetailLayers = {
 const LOCAL_STORAGE_KEYS = {
   favorites: 'em-spectrum:favorites:v1',
   favoriteBands: 'em-spectrum:favorite-bands:v1',
+  favoriteStories: 'em-spectrum:favorite-stories:v1',
   regulatoryRegion: 'em-spectrum:regulatory-region:v1',
   searchScope: 'em-spectrum:search-scope:v1',
   cursorFrequency: 'em-spectrum:cursor-frequency:v1',
@@ -111,6 +112,8 @@ interface SpectrumStore {
   // Local user preferences
   favoriteFeatureIds: string[]
   favoriteBandIds: string[]
+  /** Educational stories could not be saved, while features and bands could. */
+  favoriteStoryIds: string[]
   regulatoryRegion: RegulatoryRegion
   searchScope: SearchScope
 
@@ -137,6 +140,7 @@ interface SpectrumStore {
   toggleCursorFrequency: () => void
   toggleFavoriteFeature: (id: string) => void
   toggleFavoriteBand: (id: string) => void
+  toggleFavoriteStory: (id: string) => void
   setRegulatoryRegion: (region: RegulatoryRegion) => void
   setSearchScope: (scope: SearchScope) => void
 }
@@ -171,6 +175,7 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
       showCursorFrequency: true,
       favoriteFeatureIds: [],
       favoriteBandIds: [],
+      favoriteStoryIds: [],
       regulatoryRegion: 'all',
       searchScope: 'all',
 
@@ -178,6 +183,7 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
         set({
           favoriteFeatureIds: parseFavoriteIds(readLocalStorage(LOCAL_STORAGE_KEYS.favorites)),
           favoriteBandIds: parseFavoriteIds(readLocalStorage(LOCAL_STORAGE_KEYS.favoriteBands)),
+          favoriteStoryIds: parseFavoriteIds(readLocalStorage(LOCAL_STORAGE_KEYS.favoriteStories)),
           regulatoryRegion: parseRegulatoryRegion(readLocalStorage(LOCAL_STORAGE_KEYS.regulatoryRegion)),
           searchScope: parseSearchScope(readLocalStorage(LOCAL_STORAGE_KEYS.searchScope)),
           showCursorFrequency: readLocalStorage(LOCAL_STORAGE_KEYS.cursorFrequency) === 'false' ? false : true,
@@ -265,6 +271,16 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
             : [...s.favoriteBandIds, id]
           writeLocalStorage(LOCAL_STORAGE_KEYS.favoriteBands, JSON.stringify(favoriteBandIds))
           return { favoriteBandIds }
+        }),
+
+      toggleFavoriteStory: (id) =>
+        set((s) => {
+          const exists = s.favoriteStoryIds.includes(id)
+          const favoriteStoryIds = exists
+            ? s.favoriteStoryIds.filter(item => item !== id)
+            : [...s.favoriteStoryIds, id]
+          writeLocalStorage(LOCAL_STORAGE_KEYS.favoriteStories, JSON.stringify(favoriteStoryIds))
+          return { favoriteStoryIds }
         }),
 
       setRegulatoryRegion: (regulatoryRegion) => {

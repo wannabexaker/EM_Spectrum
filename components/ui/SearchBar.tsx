@@ -10,10 +10,6 @@ import { frequencyFeatures } from '@/data/frequencyFeatures'
 import { findRelatedFeatures } from '@/lib/spectrum/featureRelationships'
 import type { FrequencyFeature, SearchScope, SpectrumBand, SpectrumDetailDensity, SpectrumDetailLayerKey } from '@/types/spectrum'
 
-interface SearchBarProps {
-  onBandSelect?: (band: SpectrumBand) => void
-}
-
 const MODULATION_FACETS = ['All', 'OFDM', 'QPSK', 'FSK', 'FMCW', 'GFSK', 'AM', 'FM'] as const
 type ModulationFacet = typeof MODULATION_FACETS[number]
 const SIGNAL_CLASS_FACETS = ['All', 'Digital', 'Analog', 'Hybrid'] as const
@@ -238,7 +234,7 @@ function computeFacetCounts(source: SearchResult[]): {
   return { modulation, signalClass }
 }
 
-export function SearchBar({ onBandSelect }: SearchBarProps) {
+export function SearchBar() {
   const [query, setQuery] = useState('')
   const [modulationFacet, setModulationFacet] = useState<ModulationFacet>('All')
   const [signalClassFacet, setSignalClassFacet] = useState<SignalClassFacet>('All')
@@ -435,7 +431,6 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
         if (band.is_sound_overlay && !showSound) toggleLayer('sound')
         if (!band.is_sound_overlay && !showEM) toggleLayer('EM')
         selectBand(band)
-        onBandSelect?.(band)
       } else if (result.type === 'educational') {
         selectBand(null)
         // Open the story popup + animate to it (handled in SpectrumCanvas).
@@ -467,7 +462,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
       setSignalClassFacet('All')
       setOpen(false)
     },
-    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, onBandSelect, openEducationalStory, openFeatureCard, openProCard, activeMode, setMode]
+    [setZoom, selectBand, setDetailDensity, setSelectedFeature, showSound, showEM, showApplications, detailLayers, toggleLayer, toggleDetailLayer, openEducationalStory, openFeatureCard, openProCard, activeMode, setMode]
   )
 
   const getResultGroup = (result: SearchResult) => {

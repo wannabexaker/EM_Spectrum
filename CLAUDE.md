@@ -87,6 +87,30 @@ Never do linear interpolation on raw frequency values.
 ### URL state
 `?f=<freq>&z=<zoom>` decoded on mount. Deep links generated in `SidePanel.tsx` `copyDeepLink()`.
 
+### Canvas hit-testing — the renderer publishes what it drew
+
+Anything clickable that the renderer decides at draw time is republished each frame and
+read by `SpectrumCanvas.selectAtPoint`, so a click can only ever hit something visible:
+
+| Field on `SpectrumRenderer` | Contents | Click does |
+|---|---|---|
+| `eduClusters` | "+N" badges over educational pins | zoom in to separate |
+| `proClusters` | "+N" badges over professional overlays / stacked feature pins | zoom in to separate |
+| `proMarkers` | tech-overlay diamonds actually drawn | open `ProInfoPopup` |
+
+Overlap collapsing is one shared pure function — `lib/spectrum/clusterPlacement.ts`
+(`placeWithOverflow`), unit-tested. Its invariant: placed markers + every badge count
+always equals the input, so a badge can never under-report hidden density.
+
+### Detail panels and their deep links
+
+Four panels, one open at a time: `SidePanel` (bands), `FeaturePopup` (RF/atlas features),
+`EducationalPopup` (stories), `ProInfoPopup` (ITU sub-bands + tech allocations). Each is
+addressable via mutually-exclusive card params — `?edu=`, `?feature=`, `?pro=` — handled in
+`lib/deeplink/urlState.ts`. Cross-component open requests go through store bridges
+(`openEducationalStory` / `openFeatureCard` / `openProCard`), which `SpectrumCanvas`
+consumes once and clears; keep that one-shot pattern for any new panel.
+
 ## Data invariants (educational examples)
 
 `data/educationalExamples.ts` pins are placed by `category` → lane (see `SpectrumRenderer._drawEducationalPins` and the hit-test in `SpectrumCanvas`). Hard rule: any phenomenon that is **not electromagnetic** (acoustic, seismic, mechanical, orbital/cyclic, bioelectric rhythm) must use `category: 'sound'`, never an EM lane (`radio`…`gamma`) — an acoustic frequency in Hz overlaps the radio ELF band numerically but is a different medium.

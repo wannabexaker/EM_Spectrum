@@ -8,7 +8,7 @@ import {
   type ProfessionalBand,
   type ProfessionalTechnology,
 } from '@/data/professionalSpectrum'
-import type { FrequencyFeature, SpectrumBand, TechnologyOverlay } from '@/types/spectrum'
+import type { FrequencyFeature, SpectrumBand } from '@/types/spectrum'
 import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
 
 export interface SearchResult {
@@ -17,10 +17,11 @@ export interface SearchResult {
   sublabel: string
   targetFrequency: number
   targetZoom: number
+  // Note: `type: 'technology'` results carry a FrequencyFeature. TechnologyOverlay was
+  // listed here but never instantiated, so the union claimed a shape search never returns.
   data:
     | SpectrumBand
     | FrequencyFeature
-    | TechnologyOverlay
     | EducationalExample
     | ProfessionalBand
     | ProfessionalTechnology

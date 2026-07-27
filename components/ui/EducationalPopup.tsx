@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import { formatFrequency } from '@/lib/zoom/logMapper'
+import { useSpectrumStore } from '@/store/spectrumStore'
+import { CopyCardLink } from '@/components/ui/CopyCardLink'
 import type { EducationalExample } from '@/data/educationalExamples'
 import { EDUCATIONAL_EXAMPLE_MAP } from '@/data/educationalExamples'
 
@@ -17,6 +19,9 @@ interface Props {
 
 export function EducationalPopup({ example, x, y, canvasW, canvasH, onClose, onNavigate }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  const favoriteStoryIds = useSpectrumStore(s => s.favoriteStoryIds)
+  const toggleFavoriteStory = useSpectrumStore(s => s.toggleFavoriteStory)
+  const isFavorite = favoriteStoryIds.includes(example.id)
 
   useEffect(() => {
     let frame: number
@@ -58,6 +63,15 @@ export function EducationalPopup({ example, x, y, canvasW, canvasH, onClose, onN
       role="dialog"
       aria-label={example.label}
     >
+      <button
+        className={`feature-popup-favorite ${isFavorite ? 'active' : ''}`}
+        onClick={() => toggleFavoriteStory(example.id)}
+        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+        aria-pressed={isFavorite}
+        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        {isFavorite ? '★' : '☆'}
+      </button>
       <button className="edu-popup-close" onClick={onClose} aria-label="Close">×</button>
 
       <div className="edu-popup-header">
@@ -144,6 +158,8 @@ export function EducationalPopup({ example, x, y, canvasW, canvasH, onClose, onN
           </div>
         </div>
       )}
+
+      <CopyCardLink kind="edu" id={example.id} />
     </div>
   )
 }

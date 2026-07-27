@@ -37,7 +37,7 @@ export interface ProfessionalTechnology {
   sources?: ProfessionalSource[]
 }
 
-export const PROFESSIONAL_SUB_BANDS: ProfessionalBand[] = [
+const RAW_SUB_BANDS: ProfessionalBand[] = [
   { id: 'elf', label: 'ELF', rangeLabel: '3-30 Hz', frequencyMin: 3, frequencyMax: 30, category: 'radio', color: '#00d4ff', uses: 'submarine comms, geophysics' },
   { id: 'slf', label: 'SLF', rangeLabel: '30-300 Hz', frequencyMin: 30, frequencyMax: 300, category: 'radio', color: '#00d4ff', uses: 'power systems, deep comms' },
   { id: 'ulf', label: 'ULF', rangeLabel: '300 Hz-3 kHz', frequencyMin: 300, frequencyMax: 3e3, category: 'radio', color: '#00d4ff', uses: 'mines, magnetosphere' },
@@ -56,7 +56,104 @@ export const PROFESSIONAL_SUB_BANDS: ProfessionalBand[] = [
   { id: 'pro-gamma', label: 'Gamma', rangeLabel: '>30 EHz', frequencyMin: 3e19, frequencyMax: 1e26, category: 'gamma', color: '#ff006e', uses: 'nuclear, cosmic, medical' },
 ]
 
-export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = [
+// ── Provenance ───────────────────────────────────────────────────────────────
+// Allocations and band names are published documents, so professional cards can cite
+// their source the way educational stories cite papers. Before this, professional content
+// carried no confidence rating and no references at all.
+
+const ITU_NOMENCLATURE: ProfessionalSource[] = [{
+  label: 'ITU-R V.431-8',
+  url: 'https://www.itu.int/rec/R-REC-V.431/en',
+  note: 'Nomenclature of the frequency and wavelength bands used in telecommunications',
+}]
+
+const ITU_RADIO_REGULATIONS: ProfessionalSource[] = [{
+  label: 'ITU Radio Regulations',
+  url: 'https://www.itu.int/pub/R-REG-RR',
+  note: 'Treaty-level frequency allocations by region and service',
+}]
+
+/** ITU-R V.431 names the radio bands (ELF…EHF) only. The optical and ionizing entries in
+ *  this list are conventional divisions whose edges genuinely differ between references,
+ *  so they are marked approximate rather than borrowing a citation that does not cover
+ *  them. */
+const ITU_NAMED_BANDS = new Set(['elf', 'slf', 'ulf', 'vlf', 'lf', 'mf', 'hf', 'vhf', 'uhf', 'shf', 'ehf'])
+
+export const PROFESSIONAL_SUB_BANDS: ProfessionalBand[] = RAW_SUB_BANDS.map(band =>
+  ITU_NAMED_BANDS.has(band.id)
+    ? {
+        ...band,
+        standard: 'ITU-R V.431-8',
+        confidence: 'Scientifically Verified' as const,
+        sources: ITU_NOMENCLATURE,
+      }
+    : {
+        ...band,
+        confidence: 'Estimated / Approximate' as const,
+        sources: [{
+          label: 'Conventional spectral region',
+          note: 'Not standardised nomenclature — boundaries vary between references',
+        }],
+      }
+)
+
+/** Governing standard per allocation, where a single document clearly defines it.
+ *  Allocations without an entry render no standard tag rather than a guess — several
+ *  (CB, broadcast TV, AM band plans) are set nationally or regionally instead. */
+const TECH_STANDARDS: Record<string, string> = {
+  'rfid-125': 'ISO/IEC 18000-2',
+  'nfc-1356': 'ISO/IEC 14443 · NFC Forum',
+  'fm-88-108': 'ITU-R BS.450',
+  'ism-433': 'ETSI EN 300 220',
+  'iot-868': 'ETSI EN 300 220',
+  'ism-915': 'FCC Part 15.247',
+  'pro-gps-l1': 'IS-GPS-200',
+  'gps-l2': 'IS-GPS-200',
+  'gps-l5': 'IS-GPS-705',
+  'galileo-e1': 'Galileo OS SIS ICD',
+  'galileo-e5a': 'Galileo OS SIS ICD',
+  'wifi-24': 'IEEE 802.11',
+  'wifi-5': 'IEEE 802.11',
+  'wifi-6e': 'IEEE 802.11ax',
+  'wifi-6ghz-low': 'IEEE 802.11ax',
+  'wifi-6ghz-mid': 'IEEE 802.11ax',
+  'wigig-60': 'IEEE 802.11ad/ay',
+  'auto-77': 'ETSI EN 301 091',
+  '5g-28': '3GPP TS 38.104 (FR2)',
+  '5g-39': '3GPP TS 38.104 (FR2)',
+  '5g-nr-n77': '3GPP TS 38.104',
+  '5g-nr-n78': '3GPP TS 38.104',
+  '5g-nr-n79': '3GPP TS 38.104',
+  '5g-nr-n260': '3GPP TS 38.104',
+  '5g-nr-n261': '3GPP TS 38.104',
+  'lte-band1': '3GPP TS 36.101',
+  'lte-band3': '3GPP TS 36.101',
+  'lte-band7': '3GPP TS 36.101',
+  'lte-band20': '3GPP TS 36.101',
+  'ism-2450': 'ITU RR No. 5.150',
+  'ism-5800': 'ITU RR No. 5.150',
+  'ism-24': 'ITU RR No. 5.150',
+  'ism-60': 'ITU RR No. 5.150',
+  'sat-fixed-l': 'ITU RR Article 5',
+  'sat-c-down': 'ITU RR Article 5',
+  'sat-c-up': 'ITU RR Article 5',
+  'sat-ku-down': 'ITU RR Article 5',
+  'sat-ku-up': 'ITU RR Article 5',
+  'ham-160m': 'ITU RR Article 25',
+  'ham-80m': 'ITU RR Article 25',
+  'ham-40m': 'ITU RR Article 25',
+  'ham-20m': 'ITU RR Article 25',
+  'ham-10m': 'ITU RR Article 25',
+  'ham-2m': 'ITU RR Article 25',
+  'ham-70cm': 'ITU RR Article 25',
+  'hf-maritime': 'ITU RR Appendix 17',
+  'vhf-maritime': 'ITU RR Appendix 18',
+  'aviation-vhf': 'ICAO Annex 10',
+  'weather-radar-s': 'ITU-R M.1849',
+  'weather-radar-c': 'ITU-R M.1849',
+}
+
+const RAW_TECH_OVERLAYS: ProfessionalTechnology[] = [
   { id: 'rfid-125', label: '125 kHz RFID', frequency: 125e3, bandwidth: 8e3, category: 'radio', color: '#70e1ff', minZoom: 9, detail: 'Low-frequency RFID access cards and animal tags' },
   { id: 'nfc-1356', label: '13.56 MHz NFC', frequency: 13.56e6, bandwidth: 1.8e6, category: 'radio', color: '#70e1ff', minZoom: 9, detail: 'NFC, ISO 14443 smart cards and HF RFID' },
   { id: 'cb-27', label: '27 MHz CB', frequency: 27e6, bandwidth: 270e3, category: 'radio', color: '#70e1ff', minZoom: 10, detail: 'Citizens Band radio around 27 MHz' },
@@ -125,6 +222,15 @@ export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = [
   { id: 'weather-radar-c', label: 'Weather Radar (C)', frequency: 5.5e9, bandwidth: 1e9, category: 'microwave', color: '#ff6b9d', minZoom: 9, detail: 'Weather radar C-band (5.35-5.65 GHz) ITU allocation' },
   { id: 'airport-radar', label: 'Airport Radar', frequency: 9.375e9, bandwidth: 75e6, category: 'microwave', color: '#ff6b9d', minZoom: 10, detail: 'Airport surface detection radar X-band (9.2-9.5 GHz)' },
 ]
+
+// Every overlay here is a radio or microwave allocation, so the Radio Regulations are the
+// common citation; the per-id table above adds the specific governing standard on top.
+export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = RAW_TECH_OVERLAYS.map(tech => ({
+  ...tech,
+  standard: TECH_STANDARDS[tech.id],
+  confidence: 'Scientifically Verified' as const,
+  sources: ITU_RADIO_REGULATIONS,
+}))
 
 export function findProfessionalBand(frequency: number): ProfessionalBand | null {
   return PROFESSIONAL_SUB_BANDS.find(

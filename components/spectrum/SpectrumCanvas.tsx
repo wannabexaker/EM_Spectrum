@@ -200,6 +200,7 @@ export function SpectrumCanvas() {
   const openFeatureCard = useSpectrumStore(s => s.openFeatureCard)
   const pendingProId = useSpectrumStore(s => s.pendingProId)
   const openProCard = useSpectrumStore(s => s.openProCard)
+  const setMode = useSpectrumStore(s => s.setMode)
   const setZoom = useSpectrumStore(s => s.setZoom)
   const displayUnit = useSpectrumStore(s => s.displayUnit)
   const showCursorFrequency = useSpectrumStore(s => s.showCursorFrequency)
@@ -733,6 +734,9 @@ export function SpectrumCanvas() {
     const category = tech ? tech.category : band!.category
     const frequency = tech ? tech.frequency : Math.sqrt(band!.frequencyMin * band!.frequencyMax)
     const laneY = SPECTRUM_LANE_BY_ID[category as keyof typeof SPECTRUM_LANE_BY_ID]?.y ?? 0.4
+    // These markers only exist in professional mode — opening the card while educational
+    // mode is active (e.g. from a ?pro= deep link) would describe something not drawn.
+    if (useSpectrumStore.getState().activeMode !== 'professional') setMode('professional')
     setZoom(frequency, tech ? Math.max(tech.minZoom, 12) : 8)
     /* eslint-disable react-hooks/set-state-in-effect -- fulfils a one-shot cross-component
        request (a professional search pick) which is cleared above before any state is set */
@@ -740,7 +744,7 @@ export function SpectrumCanvas() {
     setEduPopup(null)
     setProPopup({ target, x: width / 2, y: height * laneY })
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [pendingProId, openProCard, setZoom, width, height])
+  }, [pendingProId, openProCard, setZoom, setMode, width, height])
 
   const selectAtPoint = useCallback(
     (clientX: number, clientY: number) => {
