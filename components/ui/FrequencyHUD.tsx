@@ -8,6 +8,7 @@ import { formatFrequency, formatWavelength, freqToWavelength, MIN_ZOOM, MAX_ZOOM
 import { getLODLevel } from '@/lib/zoom/lodController'
 import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
 import { useSpectrumData } from '@/hooks/useSpectrumData'
+import { EDUCATIONAL_EXAMPLE_MAP, type EducationalExample } from '@/data/educationalExamples'
 import type { FrequencyFeature, SpectrumBand } from '@/types/spectrum'
 const ZOOM_PRESETS = [1, 2, 3, 5, 10]
 const FEATURE_BY_ID = new Map(frequencyFeatures.map(feature => [feature.id, feature]))
@@ -28,6 +29,9 @@ export function FrequencyHUD() {
   const toggleCursorFrequency = useSpectrumStore(s => s.toggleCursorFrequency)
   const favoriteFeatureIds = useSpectrumStore(s => s.favoriteFeatureIds)
   const favoriteBandIds = useSpectrumStore(s => s.favoriteBandIds)
+  const favoriteStoryIds = useSpectrumStore(s => s.favoriteStoryIds)
+  const toggleFavoriteStory = useSpectrumStore(s => s.toggleFavoriteStory)
+  const openEducationalStory = useSpectrumStore(s => s.openEducationalStory)
   const toggleFavoriteFeature = useSpectrumStore(s => s.toggleFavoriteFeature)
   const toggleFavoriteBand = useSpectrumStore(s => s.toggleFavoriteBand)
   const setSelectedFeature = useSpectrumStore(s => s.setSelectedFeature)
@@ -71,7 +75,14 @@ export function FrequencyHUD() {
     [favoriteBandIds, allBands]
   )
 
-  const totalSaved = favoriteFeatures.length + favoriteBands.length
+  const favoriteStories = useMemo(
+    () => favoriteStoryIds
+      .map(id => EDUCATIONAL_EXAMPLE_MAP.get(id))
+      .filter((example): example is EducationalExample => Boolean(example)),
+    [favoriteStoryIds]
+  )
+
+  const totalSaved = favoriteFeatures.length + favoriteBands.length + favoriteStories.length
 
   const animateToZoom = useCallback((targetZoom: number) => {
     if (zoomAnimation.current !== null) cancelAnimationFrame(zoomAnimation.current)
@@ -287,6 +298,26 @@ export function FrequencyHUD() {
                         onClick={() => toggleFavoriteBand(band.id)}
                         aria-label={`Remove ${band.label} from saved`}
                         title="Remove saved band"
+                      >
+                        x
+                      </button>
+                    </li>
+                  ))}
+                  {favoriteStories.map(example => (
+                    <li key={`story-${example.id}`} className="hud-saved-item">
+                      <button
+                        className="hud-saved-link"
+                        onClick={() => openEducationalStory(example.id)}
+                        title={`Open ${example.label}`}
+                      >
+                        <strong>{example.shortLabel}</strong>
+                        <span>{formatFrequency(example.frequency)}</span>
+                      </button>
+                      <button
+                        className="hud-saved-remove"
+                        onClick={() => toggleFavoriteStory(example.id)}
+                        aria-label={`Remove ${example.label} from saved`}
+                        title="Remove saved story"
                       >
                         x
                       </button>
