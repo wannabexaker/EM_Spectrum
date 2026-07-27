@@ -1,4 +1,5 @@
 import type { ScientificConfidence, SpectrumCategory } from '@/types/spectrum'
+import { sourcesForStandard } from './standardSources'
 
 /** Verifiable reference for a professional allocation (ITU-R, FCC, ETSI, 3GPP…). */
 export interface ProfessionalSource {
@@ -65,12 +66,6 @@ const ITU_NOMENCLATURE: ProfessionalSource[] = [{
   label: 'ITU-R V.431-8',
   url: 'https://www.itu.int/rec/R-REC-V.431/en',
   note: 'Nomenclature of the frequency and wavelength bands used in telecommunications',
-}]
-
-const ITU_RADIO_REGULATIONS: ProfessionalSource[] = [{
-  label: 'ITU Radio Regulations',
-  url: 'https://www.itu.int/pub/R-REG-RR',
-  note: 'Treaty-level frequency allocations by region and service',
 }]
 
 /** ITU-R V.431 names the radio bands (ELF…EHF) only. The optical and ionizing entries in
@@ -223,14 +218,18 @@ const RAW_TECH_OVERLAYS: ProfessionalTechnology[] = [
   { id: 'airport-radar', label: 'Airport Radar', frequency: 9.375e9, bandwidth: 75e6, category: 'microwave', color: '#ff6b9d', minZoom: 10, detail: 'Airport surface detection radar X-band (9.2-9.5 GHz)' },
 ]
 
-// Every overlay here is a radio or microwave allocation, so the Radio Regulations are the
-// common citation; the per-id table above adds the specific governing standard on top.
-export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = RAW_TECH_OVERLAYS.map(tech => ({
-  ...tech,
-  standard: TECH_STANDARDS[tech.id],
-  confidence: 'Scientifically Verified' as const,
-  sources: ITU_RADIO_REGULATIONS,
-}))
+// Each overlay cites its own governing standard first, with the Radio Regulations kept
+// underneath for the allocation itself. Overlays with no single governing document fall
+// back to the Radio Regulations alone rather than borrowing another technology's standard.
+export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = RAW_TECH_OVERLAYS.map(tech => {
+  const standard = TECH_STANDARDS[tech.id]
+  return {
+    ...tech,
+    standard,
+    confidence: 'Scientifically Verified' as const,
+    sources: sourcesForStandard(standard),
+  }
+})
 
 export function findProfessionalBand(frequency: number): ProfessionalBand | null {
   return PROFESSIONAL_SUB_BANDS.find(

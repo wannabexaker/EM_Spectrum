@@ -7,7 +7,7 @@ import { useSpectrumData } from '@/hooks/useSpectrumData'
 import { useViewport } from '@/hooks/useViewport'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
-import { findNearestTechnology, findProfessionalBand, PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalTechnology } from '@/data/professionalSpectrum'
+import { findNearestTechnology, findProfessionalBand, PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalBand, type ProfessionalTechnology } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
 import { getBandLane, getFeatureLane, SPECTRUM_LANES, SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
@@ -150,6 +150,7 @@ type NavTarget =
   | { kind: 'feature'; id: string; frequency: number; laneId: string; feature: FrequencyFeature }
   | { kind: 'edu'; id: string; frequency: number; laneId: string; example: EducationalExample }
   | { kind: 'pro'; id: string; frequency: number; laneId: string; tech: ProfessionalTechnology }
+  | { kind: 'proband'; id: string; frequency: number; laneId: string; band: ProfessionalBand }
 
 export function SpectrumCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -378,6 +379,17 @@ export function SpectrumCanvas() {
             tech,
           }))
         : []),
+      // ITU sub-band brackets are drawn whenever the EM layer is on, and are clickable —
+      // but were unreachable by keyboard, so the band nomenclature was mouse-only.
+      ...(activeMode === 'professional' && showEM
+        ? PROFESSIONAL_SUB_BANDS.map(band => ({
+            kind: 'proband' as const,
+            id: `proband:${band.id}`,
+            frequency: Math.sqrt(band.frequencyMin * band.frequencyMax),
+            laneId: band.category,
+            band,
+          }))
+        : []),
     ]
 
     function selectFeature(feat: (typeof visibleFeatures)[number]) {
@@ -409,6 +421,11 @@ export function SpectrumCanvas() {
         setPopup(null)
         setProPopup(null)
         setEduPopup({ example: target.example, x: width / 2, y: height * laneY })
+      } else if (target.kind === 'proband') {
+        store.setSelectedLane(target.band.category)
+        setPopup(null)
+        setEduPopup(null)
+        setProPopup({ target: { kind: 'band', band: target.band }, x: width / 2, y: height * laneY })
       } else {
         store.setSelectedLane(target.tech.category)
         setPopup(null)
@@ -545,7 +562,7 @@ export function SpectrumCanvas() {
 
     window.addEventListener('keydown', handleNavKey, { capture: true })
     return () => window.removeEventListener('keydown', handleNavKey, { capture: true })
-  }, [allBands, visibleBands, visibleFeatures, commitZoom, width, height, activeMode, showApplications, eduHiddenDomains, eduVerifiedOnly])
+  }, [allBands, visibleBands, visibleFeatures, commitZoom, width, height, activeMode, showApplications, showEM, eduHiddenDomains, eduVerifiedOnly])
 
   // Resize — throttled by useViewport's ResizeObserver (100ms)
   useEffect(() => {
@@ -846,6 +863,7 @@ export function SpectrumCanvas() {
               b.category === bracketLane.id && clickFreq >= b.frequencyMin && clickFreq <= b.frequencyMax)
           : undefined
         if (subBand) {
+          navSelectedIdRef.current = `proband:${subBand.id}`
           setPopup(null)
           setEduPopup(null)
           setProPopup({ target: { kind: 'band', band: subBand }, x, y })

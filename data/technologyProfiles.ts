@@ -1,4 +1,5 @@
 import type { FrequencyFeature } from '@/types/spectrum'
+import { sourcesForStandard } from './standardSources'
 
 /**
  * Curated technology write-ups, folded into the feature set.
@@ -324,13 +325,31 @@ export const TECHNOLOGY_FEATURES: FrequencyFeature[] = [
   },
 ]
 
-/** Applies the curated write-up to a feature, if one exists for it. */
+/** Technologies that occupy a band without being allocated one — a laser class or an
+ *  imaging dose limit is set by a safety standard, not by the Radio Regulations. */
+const NOT_SPECTRUM_ALLOCATIONS = new Set([
+  'tech-laser-pointer',
+  'tech-uv-sterilizer',
+  'tech-dental-xray',
+  'tech-xray-ct',
+  'tech-pet-scan',
+  'tech-night-vision',
+  'tech-ir-remote',
+  'tech-fiber-optic',
+  'tech-microwave-oven',
+  'tech-mri-rf',
+])
+
+/** Applies the curated write-up to a feature, if one exists for it, and gives every
+ *  standard-bearing feature a citation resolved from that standard. */
 export function withTechnologyProfile(feature: FrequencyFeature): FrequencyFeature {
   const profile = TECHNOLOGY_PROFILES[feature.id]
-  if (!profile) return feature
+  const standard = profile?.standard ?? feature.standard
+  if (!standard) return feature
   return {
     ...feature,
-    standard: profile.standard,
-    detail: profile.detail ?? feature.detail,
+    standard,
+    detail: profile?.detail ?? feature.detail,
+    sources: feature.sources ?? sourcesForStandard(standard, !NOT_SPECTRUM_ALLOCATIONS.has(feature.id)),
   }
 }
