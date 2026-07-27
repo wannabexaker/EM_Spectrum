@@ -203,8 +203,10 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
 }
 
 function formatPeriod(seconds: number): string {
-  // RF periods are sub-microsecond, so without ps/ns steps every radio card read
-  // "period 0.00 us" — GPS L1 at 1.575 GHz now shows 0.63 ns.
+  // RF periods are sub-microsecond and optical ones are sub-picosecond, so without
+  // fs/ps/ns steps every radio card read "period 0.00 us" and every optical card
+  // "0.01 ps". GPS L1 now shows 0.63 ns, 1550 nm fiber 5.17 fs.
+  if (seconds < 1e-12) return `${(seconds * 1e15).toFixed(2)} fs`
   if (seconds < 1e-9) return `${(seconds * 1e12).toFixed(2)} ps`
   if (seconds < 1e-6) return `${(seconds * 1e9).toFixed(2)} ns`
   if (seconds < 1e-3) return `${(seconds * 1e6).toFixed(2)} us`
