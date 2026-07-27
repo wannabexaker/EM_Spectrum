@@ -1,5 +1,6 @@
 import type { FrequencyFeature, FrequencyRegulatoryNote } from '@/types/spectrum'
 import { universalVibrationFeatures } from './universalVibrationsAtlas'
+import { TECHNOLOGY_FEATURES, withTechnologyProfile } from './technologyProfiles'
 
 const C = {
   natural:    '#b5e48c',
@@ -2220,7 +2221,11 @@ function withFrequencySearchAliases(feature: FrequencyFeature): FrequencyFeature
   }
 }
 
-export const frequencyFeatures: FrequencyFeature[] = baseFrequencyFeatures
+export const frequencyFeatures: FrequencyFeature[] = [
+  ...baseFrequencyFeatures,
+  ...TECHNOLOGY_FEATURES,
+]
+  .map(withTechnologyProfile)
   .map(withModulationMetadata)
   .map(withRegulatoryMetadata)
   .map(withFrequencySearchAliases)

@@ -120,9 +120,12 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
         </div>
       )}
 
-      {feature.modulationTypes && feature.modulationTypes.length > 0 && (
+      {((feature.modulationTypes?.length ?? 0) > 0 || feature.standard) && (
         <div className="feature-popup-modulation">
-          {feature.modulationTypes.map(mod => (
+          {feature.standard && (
+            <span className="feature-mod-tag is-standard" title="Governing standard">{feature.standard}</span>
+          )}
+          {feature.modulationTypes?.map(mod => (
             <span key={mod} className="feature-mod-tag">{mod}</span>
           ))}
         </div>

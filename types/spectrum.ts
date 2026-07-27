@@ -97,17 +97,6 @@ export interface SpectrumBand {
   is_sound_overlay: boolean
 }
 
-export interface TechnologyOverlay {
-  id: string
-  label: string
-  frequency_center: number
-  frequency_bandwidth: number
-  standard?: string
-  description: string
-  band_id: string
-  icon?: string
-}
-
 export interface FrequencyFeature {
   id: string
   label: string
@@ -121,6 +110,8 @@ export interface FrequencyFeature {
   minZoom: number
   aliases?: string[]
   atlasCategory?: UniversalVibrationCategory
+  /** Governing standard, e.g. "IEEE 802.11ax" / "IS-GPS-200" — shown as a tag. */
+  standard?: string
   confidence?: ScientificConfidence
   sources?: Array<{
     label: string

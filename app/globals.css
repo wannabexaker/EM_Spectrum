@@ -2149,6 +2149,13 @@ html, body {
 }
 .feature-popup-close:hover { color: var(--text-primary); }
 
+/* Governing standard reads as provenance, not as a signal property like modulation. */
+.feature-mod-tag.is-standard {
+  color: #9fc4ff;
+  background: rgba(122, 184, 255, 0.12);
+  border-color: rgba(122, 184, 255, 0.32);
+}
+
 /* Action buttons at the foot of a detail panel (zoom-to / copy-link). */
 .feature-popup-zoom,
 .feature-popup-share {

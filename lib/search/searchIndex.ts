@@ -65,6 +65,7 @@ export function buildFeatureSearchIndex(): void {
       { name: 'family', weight: 0.14 },
       { name: 'aliases', weight: 0.16 },
       { name: 'modulationTypes', weight: 0.12 },
+      { name: 'standard', weight: 0.1 },
       { name: 'atlasCategory', weight: 0.08 },
       { name: 'confidence', weight: 0.06 },
       { name: 'listPath', weight: 0.06 },
