@@ -98,7 +98,7 @@ const TECH_COLORS = {
 /** Technologies the feature set did not cover at all. The optical and ionizing entries
  *  matter most: professional mode drew no technology markers above the microwave lanes,
  *  so the infrared, visible, UV, X-ray and gamma tracks had nothing on them. */
-export const TECHNOLOGY_FEATURES: FrequencyFeature[] = [
+const RAW_TECHNOLOGY_FEATURES: FrequencyFeature[] = [
   {
     id: 'tech-loran-c',
     label: 'LORAN-C (100 kHz)',
@@ -324,6 +324,18 @@ export const TECHNOLOGY_FEATURES: FrequencyFeature[] = [
     confidence: 'Scientifically Verified',
   },
 ]
+
+/**
+ * Professional-only, deliberately. Educational mode draws its curated story pins *and*
+ * feature pins, so leaving these visible in both modes put a second pin on top of the
+ * stories that already cover the same thing — PET, fiber optic, the microwave oven, UV
+ * sterilisation, Ku satellite TV and UHF TV all have one. These are allocations with a
+ * governing standard, which is what professional mode is for.
+ */
+export const TECHNOLOGY_FEATURES: FrequencyFeature[] = RAW_TECHNOLOGY_FEATURES.map(feature => ({
+  ...feature,
+  modeVisibility: 'professional',
+}))
 
 /** Technologies that occupy a band without being allocated one — a laser class or an
  *  imaging dose limit is set by a safety standard, not by the Radio Regulations. */

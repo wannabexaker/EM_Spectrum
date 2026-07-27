@@ -8,7 +8,7 @@ const STEPS: { title: string; body: string; icon: string }[] = [
   {
     icon: '📡',
     title: 'One axis, 40 decades',
-    body: 'Every oscillation in the universe on a single logarithmic scale — from Milankovitch climate cycles (10⁻¹³ Hz) to gamma rays (10²⁰ Hz). The bottom lane holds non-EM waves: sound, seismic, mechanical.',
+    body: 'Every oscillation in the universe on a single logarithmic scale — 40 decades, from 10⁻¹⁴ Hz (Milankovitch climate cycles sit near this end) to 10²⁶ Hz. The bottom lane holds non-EM waves: sound, seismic, mechanical.',
   },
   {
     icon: '🔍',

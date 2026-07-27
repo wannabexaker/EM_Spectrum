@@ -445,6 +445,10 @@ export function SearchBar() {
         openProCard(result.data.id)
       } else {
         const feature = result.data as FrequencyFeature
+        // A mode-restricted feature is not drawn in the other mode, so landing on it
+        // would zoom to a pin that isn't there.
+        if (feature.modeVisibility === 'professional' && activeMode !== 'professional') setMode('professional')
+        if (feature.modeVisibility === 'educational' && activeMode !== 'educational') setMode('educational')
         if (!showApplications) toggleLayer('applications')
         for (const layer of disabledDetailLayersForFeature(feature, detailLayers)) {
           toggleDetailLayer(layer)

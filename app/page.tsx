@@ -22,7 +22,7 @@ export default function LandingPage() {
             <h1 className="landing-title">The Electromagnetic Spectrum</h1>
 
             <p className="landing-subtitle">
-              From 1 Hz to 10²⁶ Hz — explore every frequency in the universe.
+              From 10⁻¹⁴ Hz to 10²⁶ Hz — explore every frequency in the universe.
               Infinite zoom. Real-world applications.
               <br />
               Full physics detail.
