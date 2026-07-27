@@ -131,6 +131,14 @@ function resultTextPriority(result: SearchResult, query: string): number {
   return 44
 }
 
+/** Human-readable chip text for a result type — the raw union value would surface
+ *  internal names like "pro-tech" in the dropdown. */
+function resultTypeLabel(type: SearchResult['type']): string {
+  if (type === 'pro-tech') return 'allocation'
+  if (type === 'pro-band') return 'ITU band'
+  return type
+}
+
 /** True only for result types whose `data` really is a FrequencyFeature. Bands,
  *  educational stories and professional allocations have different shapes, so casting
  *  them to a feature would read undefined fields. */
@@ -688,7 +696,7 @@ export function SearchBar({ onBandSelect }: SearchBarProps) {
                       onClick={() => handleSelect(result)}
                     >
                       <span className="result-label">{result.label}</span>
-                      <span className="result-category">{hiddenReason ?? (modulationHint ? `${result.type} · ${modulationHint}` : result.type)}</span>
+                      <span className="result-category">{hiddenReason ?? (modulationHint ? `${resultTypeLabel(result.type)} · ${modulationHint}` : resultTypeLabel(result.type))}</span>
                       <span className="result-freq">{result.sublabel}</span>
                     </li>
                   )

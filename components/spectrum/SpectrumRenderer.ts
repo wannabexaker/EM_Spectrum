@@ -8,6 +8,7 @@ import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalTechnology } from '@/data/professionalSpectrum'
+import { placeWithOverflow } from '@/lib/spectrum/clusterPlacement'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { EDUCATIONAL_EXAMPLES, isEduExampleVisible, type EducationalExample } from '@/data/educationalExamples'
 import { useSpectrumStore } from '@/store/spectrumStore'
@@ -724,23 +725,10 @@ export class SpectrumRenderer {
     // badge family there would be noise rather than information.
     if (mode === 'professional') {
       for (const list of drawnByLane.values()) {
-        list.sort((a, b) => a.x - b.x)
-        let lastX = -Infinity
-        let overflow = 0
-        let anchor: { x: number; y: number; freq: number } | null = null
-        const flush = () => {
-          if (overflow > 0 && anchor) {
-            this._drawClusterBadge(container, anchor.x, anchor.y, overflow, anchor.freq, this.proClusters)
-            overflow = 0
-          }
+        // Pins stay drawn (and clickable) — the badge only reports how many stack here.
+        for (const { anchor, count } of placeWithOverflow(list, minLabelSpacing).badges) {
+          this._drawClusterBadge(container, anchor.x, anchor.y, count, anchor.freq, this.proClusters)
         }
-        for (const p of list) {
-          if (p.x - lastX < minLabelSpacing) { overflow++; continue }
-          flush()
-          lastX = p.x
-          anchor = p
-        }
-        flush()
       }
     }
   }
@@ -818,25 +806,12 @@ export class SpectrumRenderer {
 
     this.eduClusters = [] // republished each frame; read by the canvas hit-test
     for (const list of perLane.values()) {
-      list.sort((a, b) => a.x - b.x)
-      let lastRight = -Infinity
-      let overflow = 0
-      let anchorX = 0
-      let anchorY = 0
-      let anchorFreq = 0
-      const flush = () => {
-        if (overflow > 0) { this._drawClusterBadge(container, anchorX, anchorY - 21, overflow, anchorFreq, this.eduClusters); overflow = 0 }
+      const { placed, badges } = placeWithOverflow(list, minSpacing, p => Math.max(70, p.ex.label.length * 6.4))
+      for (const p of placed) this._drawEduPin(container, p.ex, p.x, p.y)
+      for (const badge of badges) {
+        const { anchor, count } = badge
+        this._drawClusterBadge(container, anchor.x, anchor.y - 21, count, anchor.ex.frequency, this.eduClusters)
       }
-      for (const p of list) {
-        if (p.x - lastRight < minSpacing) { overflow++; continue }
-        flush() // resolve overflow against the previous anchor before moving on
-        this._drawEduPin(container, p.ex, p.x, p.y)
-        lastRight = p.x + Math.max(70, p.ex.label.length * 6.4)
-        anchorX = p.x
-        anchorY = p.y
-        anchorFreq = p.ex.frequency
-      }
-      flush() // trailing overflow after the last placed pin
     }
   }
 
@@ -927,30 +902,16 @@ export class SpectrumRenderer {
     }
 
     for (const list of perLane.values()) {
-      list.sort((a, b) => a.x - b.x)
-      let lastRight = -Infinity
-      let overflow = 0
-      let anchorX = 0
-      let anchorY = 0
-      let anchorFreq = 0
-      const flush = () => {
-        if (overflow > 0) {
-          this._drawClusterBadge(container, anchorX, anchorY - 26, overflow, anchorFreq, this.proClusters)
-          overflow = 0
-        }
-      }
-      for (const p of list) {
-        if (p.x - lastRight < minSpacing) { overflow++; continue }
-        flush() // resolve overflow against the previous anchor before moving on
+      const { placed, badges } = placeWithOverflow(list, minSpacing, p => Math.max(72, p.tech.label.length * 5.8))
+      for (const p of placed) {
         this._drawTechOverlay(container, p.tech, p.x, p.y, p.visibility, state, W, p.visibility >= minVisibilityForLabel)
         // Only markers actually drawn become clickable — what you see is what you can open.
         this.proMarkers.push({ x: p.x, y: p.y, tech: p.tech })
-        lastRight = p.x + Math.max(72, p.tech.label.length * 5.8)
-        anchorX = p.x
-        anchorY = p.y
-        anchorFreq = p.tech.frequency
       }
-      flush() // trailing overflow after the last placed marker
+      for (const badge of badges) {
+        const { anchor, count } = badge
+        this._drawClusterBadge(container, anchor.x, anchor.y - 26, count, anchor.tech.frequency, this.proClusters)
+      }
     }
   }
 
