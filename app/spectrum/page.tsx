@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/ui/SearchBar'
 import { LayerToggle } from '@/components/ui/LayerToggle'
 import { ModeToggle } from '@/components/ui/ModeToggle'
 import { EduAtlasFilter } from '@/components/ui/EduAtlasFilter'
+import { ProLayerFilter } from '@/components/ui/ProLayerFilter'
 import { OnboardingTour } from '@/components/ui/OnboardingTour'
 import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
@@ -60,6 +61,7 @@ export default function SpectrumPage() {
           <div className="header-sep" aria-hidden />
           <ModeToggle />
           <EduAtlasFilter />
+          <ProLayerFilter />
           <UnitSwitcher />
           <RegulatoryRegionToggle />
         </nav>

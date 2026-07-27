@@ -39,20 +39,41 @@ export function decodeViewportState(): {
   return { centerFrequency: clampFrequency(freq), zoomLevel: clampZoom(zoom), detailDensity }
 }
 
-// Educational example deep link — `?edu=<id>` opens a specific story popup.
-// Kept in sync with the open popup; preserves the viewport params (f/z/d).
-export function setEduParam(id: string | null): void {
+// Card deep links — `?edu=`, `?feature=` and `?pro=` each reopen a specific detail panel:
+// an educational story, an RF/atlas feature card, or a professional allocation. Only one
+// panel can be open at a time, so the params are mutually exclusive: writing one clears
+// the others. Viewport params (f/z/d) are always preserved.
+export type CardParam = 'edu' | 'feature' | 'pro'
+
+const CARD_PARAMS: CardParam[] = ['edu', 'feature', 'pro']
+
+export function setCardParam(kind: CardParam, id: string | null): void {
   if (typeof window === 'undefined') return
   const params = new URLSearchParams(window.location.search)
-  if (id) params.set('edu', id)
-  else params.delete('edu')
+  for (const key of CARD_PARAMS) params.delete(key)
+  if (id) params.set(kind, id)
   const qs = params.toString()
   window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
 }
 
-export function getEduParam(): string | null {
+/** The card the current URL points at, if any. */
+export function getCardParam(): { kind: CardParam; id: string } | null {
   if (typeof window === 'undefined') return null
-  return new URLSearchParams(window.location.search).get('edu')
+  const params = new URLSearchParams(window.location.search)
+  for (const key of CARD_PARAMS) {
+    const id = params.get(key)
+    if (id) return { kind: key, id }
+  }
+  return null
+}
+
+/** Absolute link that reopens this card at the current viewport — for "copy link". */
+export function buildCardLink(kind: CardParam, id: string): string {
+  if (typeof window === 'undefined') return ''
+  const params = new URLSearchParams(window.location.search)
+  for (const key of CARD_PARAMS) params.delete(key)
+  params.set(kind, id)
+  return `${window.location.origin}${window.location.pathname}?${params.toString()}`
 }
 
 export function decodeDetailDensityPreference(): SpectrumDetailDensity | null {

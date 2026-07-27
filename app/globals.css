@@ -2149,8 +2149,9 @@ html, body {
 }
 .feature-popup-close:hover { color: var(--text-primary); }
 
-/* Action button in the professional detail panel (ProInfoPopup). */
-.feature-popup-zoom {
+/* Action buttons at the foot of a detail panel (zoom-to / copy-link). */
+.feature-popup-zoom,
+.feature-popup-share {
   display: block;
   width: 100%;
   margin-top: 10px;
@@ -2166,10 +2167,18 @@ html, body {
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.feature-popup-zoom:hover {
+.feature-popup-zoom:hover,
+.feature-popup-share:hover {
   color: #dce9ff;
   background: rgba(122, 184, 255, 0.18);
   border-color: rgba(122, 184, 255, 0.55);
+}
+/* Copy-link is the secondary action — quieter than zoom-to. */
+.feature-popup-share {
+  margin-top: 6px;
+  color: rgba(159, 176, 204, 0.9);
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .feature-popup-favorite {

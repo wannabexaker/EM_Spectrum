@@ -5,6 +5,7 @@ import { ATLAS_CATEGORY_LABELS } from '@/data/universalVibrationsAtlas'
 import { F_MIN, formatFrequency } from '@/lib/zoom/logMapper'
 import { findRelatedFeatures, formatRelationshipReason } from '@/lib/spectrum/featureRelationships'
 import { useSpectrumStore } from '@/store/spectrumStore'
+import { CopyCardLink } from '@/components/ui/CopyCardLink'
 import type { FrequencyFeature, FrequencyRegulatoryNote, RegulatoryRegion } from '@/types/spectrum'
 
 interface Props {
@@ -192,11 +193,17 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
           </div>
         </div>
       )}
+
+      <CopyCardLink kind="feature" id={feature.id} />
     </div>
   )
 }
 
 function formatPeriod(seconds: number): string {
+  // RF periods are sub-microsecond, so without ps/ns steps every radio card read
+  // "period 0.00 us" — GPS L1 at 1.575 GHz now shows 0.63 ns.
+  if (seconds < 1e-9) return `${(seconds * 1e12).toFixed(2)} ps`
+  if (seconds < 1e-6) return `${(seconds * 1e9).toFixed(2)} ns`
   if (seconds < 1e-3) return `${(seconds * 1e6).toFixed(2)} us`
   if (seconds < 1) return `${(seconds * 1e3).toFixed(2)} ms`
   if (seconds < 60) return `${seconds.toFixed(2)} s`

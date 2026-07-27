@@ -7,7 +7,7 @@ import { useSpectrumData } from '@/hooks/useSpectrumData'
 import { useViewport } from '@/hooks/useViewport'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
-import { findNearestTechnology, findProfessionalBand, PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS } from '@/data/professionalSpectrum'
+import { findNearestTechnology, findProfessionalBand, PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalTechnology } from '@/data/professionalSpectrum'
 import { getVisibleSpectrumGradient } from '@/lib/pixi/colorMapper'
 import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength, freqToScreenX, screenXToFreq } from '@/lib/zoom/logMapper'
 import { getBandLane, getFeatureLane, SPECTRUM_LANES, SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
@@ -20,7 +20,7 @@ import { CanvasContextBadge } from '@/components/ui/CanvasContextBadge'
 import { EducationalPopup } from '@/components/ui/EducationalPopup'
 import { ProInfoPopup, type ProTarget } from '@/components/ui/ProInfoPopup'
 import { EDUCATIONAL_EXAMPLES, EDUCATIONAL_EXAMPLE_MAP, isEduExampleVisible } from '@/data/educationalExamples'
-import { getEduParam, setEduParam } from '@/lib/deeplink/urlState'
+import { getCardParam, setCardParam } from '@/lib/deeplink/urlState'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { probeHardwareWebGL } from '@/lib/pixi/webglSupport'
 import type { ZoomState, FrequencyFeature, SpectrumBand } from '@/types/spectrum'
@@ -144,6 +144,13 @@ function SpectrumCanvasFallback({
   )
 }
 
+/** Anything the arrow keys can move between on the canvas. Keeping the payload in a
+ *  discriminated union lets one navigation pass drive three different detail panels. */
+type NavTarget =
+  | { kind: 'feature'; id: string; frequency: number; laneId: string; feature: FrequencyFeature }
+  | { kind: 'edu'; id: string; frequency: number; laneId: string; example: EducationalExample }
+  | { kind: 'pro'; id: string; frequency: number; laneId: string; tech: ProfessionalTechnology }
+
 export function SpectrumCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<SpectrumRenderer | null>(null)
@@ -198,6 +205,9 @@ export function SpectrumCanvas() {
   const showCursorFrequency = useSpectrumStore(s => s.showCursorFrequency)
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null)
   const pointerMovedRef = useRef(false)
+  /** Last target the arrows (or a click) landed on — the store only tracks feature ids,
+   *  so educational and professional picks need their own cursor. */
+  const navSelectedIdRef = useRef<string | null>(null)
 
   const visibleFeatures = useMemo(() => {
     if (!showApplications) return []
@@ -336,30 +346,94 @@ export function SpectrumCanvas() {
       return i === -1 ? 0 : i
     }
 
-    function selectFeature(feat: ReturnType<typeof visibleFeatures[0] extends infer T ? () => T : never> extends never ? (typeof visibleFeatures)[number] : (typeof visibleFeatures)[number]) {
+    // Everything the arrow keys can land on. RF/atlas features were the only navigable
+    // targets, so educational stories and professional allocations — the headline content
+    // of each mode — were reachable by mouse only.
+    const navTargets: NavTarget[] = [
+      ...visibleFeatures.map(feature => ({
+        kind: 'feature' as const,
+        id: feature.id,
+        frequency: feature.frequency_center,
+        laneId: getFeatureLane(feature, allBands).id,
+        feature,
+      })),
+      ...(activeMode === 'educational' && showApplications
+        ? EDUCATIONAL_EXAMPLES
+            .filter(example => isEduExampleVisible(example, eduHiddenDomains, eduVerifiedOnly))
+            .map(example => ({
+              kind: 'edu' as const,
+              id: `edu:${example.id}`,
+              frequency: example.frequency,
+              laneId: example.category,
+              example,
+            }))
+        : []),
+      ...(activeMode === 'professional' && showApplications
+        ? PROFESSIONAL_TECH_OVERLAYS.map(tech => ({
+            kind: 'pro' as const,
+            id: `pro:${tech.id}`,
+            frequency: tech.frequency,
+            laneId: tech.category,
+            tech,
+          }))
+        : []),
+    ]
+
+    function selectFeature(feat: (typeof visibleFeatures)[number]) {
       const store = useSpectrumStore.getState()
       const lane = getFeatureLane(feat, allBands)
+      navSelectedIdRef.current = feat.id
       commitZoom(feat.frequency_center, store.zoomLevel)
       store.setSelectedFeature(feat.id)
       store.setSelectedLane(lane.id)
       store.selectBand(null)
       setPopup({ feature: feat, x: width / 2, y: height * lane.y })
       setEduPopup(null)
+      setProPopup(null)
     }
 
-    function getLaneFeatures(laneId: string) {
-      return visibleFeatures
-        .filter(f => getFeatureLane(f, allBands).id === laneId)
-        .sort((a, b) => a.frequency_center - b.frequency_center)
+    function selectTarget(target: NavTarget) {
+      if (target.kind === 'feature') {
+        selectFeature(target.feature)
+        return
+      }
+      const store = useSpectrumStore.getState()
+      navSelectedIdRef.current = target.id
+      const laneY = SPECTRUM_LANE_BY_ID[target.laneId as keyof typeof SPECTRUM_LANE_BY_ID]?.y ?? 0.4
+      commitZoom(target.frequency, store.zoomLevel)
+      store.selectBand(null)
+      store.setSelectedFeature(null)
+      if (target.kind === 'edu') {
+        store.setSelectedLane(target.example.category)
+        setPopup(null)
+        setProPopup(null)
+        setEduPopup({ example: target.example, x: width / 2, y: height * laneY })
+      } else {
+        store.setSelectedLane(target.tech.category)
+        setPopup(null)
+        setEduPopup(null)
+        setProPopup({ target: { kind: 'tech', tech: target.tech }, x: width / 2, y: height * laneY })
+      }
     }
 
-    function getNearestFeatureIndex(features: typeof visibleFeatures, frequency: number): number {
-      if (features.length === 0) return -1
+    /** The target the arrows should move from: the last keyboard pick, else the selected pin. */
+    function currentNavId(): string | null {
+      return navSelectedIdRef.current ?? useSpectrumStore.getState().selectedFeatureId
+    }
+
+    function getLaneTargets(laneId: string) {
+      return navTargets
+        .filter(target => target.laneId === laneId)
+        .sort((a, b) => a.frequency - b.frequency)
+    }
+
+    function getNearestTargetIndex(targets: NavTarget[], frequency: number): number {
+      if (targets.length === 0) return -1
       const logTarget = Math.log10(Math.max(frequency, F_MIN))
       let bestIdx = 0
       let bestDist = Number.POSITIVE_INFINITY
-      for (let i = 0; i < features.length; i += 1) {
-        const dist = Math.abs(Math.log10(Math.max(features[i].frequency_center, F_MIN)) - logTarget)
+      for (let i = 0; i < targets.length; i += 1) {
+        const dist = Math.abs(Math.log10(Math.max(targets[i].frequency, F_MIN)) - logTarget)
         if (dist < bestDist) {
           bestDist = dist
           bestIdx = i
@@ -380,36 +454,27 @@ export function SpectrumCanvas() {
       // ── Shift + Arrow: POI navigation ──────────────────────────────────
       if (e.shiftKey) {
         if (isHoriz) {
-          // Shift+Left/Right → prev/next visible POI by frequency
-          if (visibleFeatures.length === 0) return
-          const sorted = [...visibleFeatures].sort((a, b) => a.frequency_center - b.frequency_center)
-          const curIdx = store.selectedFeatureId
-            ? sorted.findIndex(f => f.id === store.selectedFeatureId)
-            : dir === 1 ? -1 : sorted.length
+          // Shift+Left/Right → prev/next navigable target by frequency
+          if (navTargets.length === 0) return
+          const sorted = [...navTargets].sort((a, b) => a.frequency - b.frequency)
+          const navId = currentNavId()
+          const foundIdx = navId ? sorted.findIndex(t => t.id === navId) : -1
+          const curIdx = foundIdx !== -1 ? foundIdx : dir === 1 ? -1 : sorted.length
           const nextIdx = (curIdx + dir + sorted.length) % sorted.length
           e.preventDefault()
           e.stopImmediatePropagation()
-          selectFeature(sorted[nextIdx])
+          selectTarget(sorted[nextIdx])
         } else {
-          // Shift+Up/Down → nearest POI in the adjacent lane
+          // Shift+Up/Down → nearest target in the adjacent lane
           const laneIdx = getCurrentLaneIdx(store.centerFrequency)
           const adjIdx = laneIdx + dir
           if (adjIdx < 0 || adjIdx >= lanesOrdered.length) return
-          const adjLane = lanesOrdered[adjIdx]
-          const candidates = visibleFeatures.filter(f => {
-            const fl = getFeatureLane(f, allBands)
-            return fl.id === adjLane.id
-          })
-          if (candidates.length === 0) return
-          const logCur = Math.log10(Math.max(store.centerFrequency, 1e-14))
-          const nearest = candidates.reduce((best, f) =>
-            Math.abs(Math.log10(Math.max(f.frequency_center, 1e-14)) - logCur) <
-            Math.abs(Math.log10(Math.max(best.frequency_center, 1e-14)) - logCur)
-              ? f : best
-          )
+          const candidates = getLaneTargets(lanesOrdered[adjIdx].id)
+          const nearestIdx = getNearestTargetIndex(candidates, store.centerFrequency)
+          if (nearestIdx === -1) return
           e.preventDefault()
           e.stopImmediatePropagation()
-          selectFeature(nearest)
+          selectTarget(candidates[nearestIdx])
         }
         return
       }
@@ -435,18 +500,18 @@ export function SpectrumCanvas() {
           const laneId = lanesOrdered[laneIdx]?.id ?? lanesOrdered[0]?.id
           if (!laneId) return
 
-          const sorted = getLaneFeatures(laneId)
+          const sorted = getLaneTargets(laneId)
           if (sorted.length === 0) return
 
-          const idx = store.selectedFeatureId
-            ? sorted.findIndex(f => f.id === store.selectedFeatureId)
-            : getNearestFeatureIndex(sorted, store.centerFrequency)
+          const navId = currentNavId()
+          const foundIdx = navId ? sorted.findIndex(t => t.id === navId) : -1
+          const idx = foundIdx !== -1 ? foundIdx : getNearestTargetIndex(sorted, store.centerFrequency)
 
           if (idx === -1) return
           const next = sorted[(idx + dir + sorted.length) % sorted.length]
           e.preventDefault()
           e.stopImmediatePropagation()
-          selectFeature(next)
+          selectTarget(next)
         }
       } else {
         // ArrowUp/Down: jump to adjacent lane at the same (clamped) frequency
@@ -455,13 +520,13 @@ export function SpectrumCanvas() {
         if (adjIdx < 0 || adjIdx >= lanesOrdered.length) return
         const adjLane = lanesOrdered[adjIdx]
 
-        const laneFeatures = getLaneFeatures(adjLane.id)
-        if (laneFeatures.length > 0) {
-          const nearestIdx = getNearestFeatureIndex(laneFeatures, store.centerFrequency)
+        const laneTargets = getLaneTargets(adjLane.id)
+        if (laneTargets.length > 0) {
+          const nearestIdx = getNearestTargetIndex(laneTargets, store.centerFrequency)
           if (nearestIdx !== -1) {
             e.preventDefault()
             e.stopImmediatePropagation()
-            selectFeature(laneFeatures[nearestIdx])
+            selectTarget(laneTargets[nearestIdx])
             return
           }
         }
@@ -479,7 +544,7 @@ export function SpectrumCanvas() {
 
     window.addEventListener('keydown', handleNavKey, { capture: true })
     return () => window.removeEventListener('keydown', handleNavKey, { capture: true })
-  }, [allBands, visibleBands, visibleFeatures, commitZoom, width, height])
+  }, [allBands, visibleBands, visibleFeatures, commitZoom, width, height, activeMode, showApplications, eduHiddenDomains, eduVerifiedOnly])
 
   // Resize — throttled by useViewport's ResizeObserver (100ms)
   useEffect(() => {
@@ -594,13 +659,20 @@ export function SpectrumCanvas() {
     [zoomState, width, height, setZoom]
   )
 
-  // #4 — keep the `?edu=<id>` URL param in sync with the open story popup.
-  // Skip the first run so a deep-linked param isn't wiped before it's read below.
-  const eduSyncSkip = useRef(true)
+  // Keep the card deep-link param in sync with whichever detail panel is open, so the URL
+  // in the address bar always reproduces what is on screen. Skip the first run so a
+  // deep-linked param isn't wiped before it's read below.
+  const cardSyncSkip = useRef(true)
   useEffect(() => {
-    if (eduSyncSkip.current) { eduSyncSkip.current = false; return }
-    setEduParam(eduPopup?.example.id ?? null)
-  }, [eduPopup])
+    if (cardSyncSkip.current) { cardSyncSkip.current = false; return }
+    if (eduPopup) setCardParam('edu', eduPopup.example.id)
+    else if (popup) setCardParam('feature', popup.feature.id)
+    else if (proPopup) {
+      const { target } = proPopup
+      setCardParam('pro', target.kind === 'tech' ? target.tech.id : target.band.id)
+    }
+    else setCardParam('edu', null) // nothing open — clears all card params
+  }, [eduPopup, popup, proPopup])
 
   // Open a story on request from elsewhere (e.g. picking an educational search result).
   useEffect(() => {
@@ -611,17 +683,20 @@ export function SpectrumCanvas() {
     if (ex) handleEduNavigate(ex)
   }, [pendingEduStoryId, handleEduNavigate, openEducationalStory])
 
-  // #4 — open a deep-linked story once, after the renderer is ready.
-  const eduDeepLinkDone = useRef(false)
+  // Open a deep-linked card once, after the renderer is ready. Feature and professional
+  // cards go through the store bridges so there is a single open path per card type.
+  const cardDeepLinkDone = useRef(false)
   useEffect(() => {
-    if (!isReady || eduDeepLinkDone.current) return
-    eduDeepLinkDone.current = true
-    const id = getEduParam()
-    if (!id) return
-    const ex = EDUCATIONAL_EXAMPLE_MAP.get(id)
+    if (!isReady || cardDeepLinkDone.current) return
+    cardDeepLinkDone.current = true
+    const card = getCardParam()
+    if (!card) return
+    if (card.kind === 'feature') { openFeatureCard(card.id); return }
+    if (card.kind === 'pro') { openProCard(card.id); return }
+    const ex = EDUCATIONAL_EXAMPLE_MAP.get(card.id)
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time open of the deep-linked story after the async renderer is ready
     if (ex) handleEduNavigate(ex)
-  }, [isReady, handleEduNavigate])
+  }, [isReady, handleEduNavigate, openFeatureCard, openProCard])
 
   const handleFeatureNavigate = useCallback(
     (feature: FrequencyFeature) => {
@@ -708,6 +783,7 @@ export function SpectrumCanvas() {
         const techHit = rendererRef.current?.proMarkers.find(m =>
           Math.abs(x - m.x) < 11 + touchPad && Math.abs(y - (m.y - 26)) < 12 + touchPad)
         if (techHit) {
+          navSelectedIdRef.current = `pro:${techHit.tech.id}`
           setPopup(null)
           setEduPopup(null)
           setProPopup({ target: { kind: 'tech', tech: techHit.tech }, x, y })
@@ -730,6 +806,7 @@ export function SpectrumCanvas() {
           return Math.abs(x - pinX) < 12 + touchPad && Math.abs(y - pinY) < 14 + touchPad
         })
         if (eduHit) {
+          navSelectedIdRef.current = `edu:${eduHit.id}`
           setPopup(null)
           setEduPopup({ example: eduHit, x, y })
           setSelectedFeature(null)
@@ -746,6 +823,7 @@ export function SpectrumCanvas() {
         return Math.abs(x - dotX) < 14 + touchPad && Math.abs(y - dotY) < 16 + touchPad
       })
       if (featureHit) {
+        navSelectedIdRef.current = featureHit.id
         setPopup({ feature: featureHit, x, y })
         setSelectedFeature(featureHit.id)
         setSelectedLane(getFeatureLane(featureHit, visibleBands).id)
@@ -792,6 +870,7 @@ export function SpectrumCanvas() {
         selectBand(null)
         setSelectedFeature(null)
         setSelectedLane(null)
+        navSelectedIdRef.current = null
       }
       pointerDownRef.current = null
     },

@@ -124,6 +124,7 @@ interface SpectrumStore {
   setSelectedLane: (lane: SpectrumCategory | null) => void
   toggleLayer: (layer: 'EM' | 'sound' | 'applications' | 'hazards') => void
   toggleDetailLayer: (layer: SpectrumDetailLayerKey) => void
+  resetDetailLayers: () => void
   toggleEduDomain: (domain: UniversalVibrationCategory) => void
   toggleEduVerifiedOnly: () => void
   resetEduFilters: () => void
@@ -209,6 +210,11 @@ const spectrumVanillaStore = createStore<SpectrumStore>()(
             [layer]: !s.detailLayers[layer],
           },
         })),
+
+      // Back to whatever the current density/mode preset prescribes, which is the
+      // baseline users see before touching individual layers.
+      resetDetailLayers: () =>
+        set((s) => ({ detailLayers: getDetailDensityLayerPreset(s.detailDensity, s.activeMode) })),
 
       toggleEduDomain: (domain) =>
         set((s) => ({

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { F_MIN, formatFrequency } from '@/lib/zoom/logMapper'
+import { CopyCardLink } from '@/components/ui/CopyCardLink'
 import type { ProfessionalBand, ProfessionalTechnology } from '@/data/professionalSpectrum'
 
 /** What the canvas hit-test resolved: an ITU sub-band bracket or a technology overlay. */
@@ -127,6 +128,7 @@ export function ProInfoPopup({ target, x, y, canvasW, canvasH, onClose, onZoom }
       <button className="feature-popup-zoom" onClick={() => onZoom(centerFrequency)}>
         Zoom to {isBand ? 'band' : 'allocation'}
       </button>
+      <CopyCardLink kind="pro" id={source.id} />
     </div>
   )
 }
