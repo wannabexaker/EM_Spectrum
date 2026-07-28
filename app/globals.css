@@ -1792,6 +1792,11 @@ html, body {
     gap: 0.15rem 0.4rem;
     padding: 0.25rem 0.5rem;
     min-height: 0;
+    /* The ruler and the lane legend are positioned with z-index 10 and 20 inside the
+       canvas, which is an earlier sibling — so without a stacking context of its own the
+       HUD painted underneath them, and they cut straight through the Saved sheet. */
+    position: relative;
+    z-index: 120;
   }
   .hud-readout { grid-column: 1; justify-content: flex-start; gap: 0.35rem; }
   .hud-center {
