@@ -1639,8 +1639,15 @@ html, body {
   .search-input { min-height: 34px; font-size: 0.74rem; }
   .region-toggle { display: none; }
 
-  /* Lane chips are pinned to the right edge and were landing on top of the pins. */
-  .category-legend { transform: scale(0.82); transform-origin: right center; opacity: 0.9; }
+  /* Lane chips are pinned to the right edge, where long pin labels run into them. They
+     are a legend, not content, so on a phone they shrink and step back — the marker
+     underneath stays readable through them. */
+  .category-legend {
+    transform: scale(0.72);
+    transform-origin: right center;
+    opacity: 0.66;
+    pointer-events: none;
+  }
 
   .hud-bar {
     grid-template-columns: 1fr;
