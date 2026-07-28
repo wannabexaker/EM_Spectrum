@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { placeWithOverflow } from './clusterPlacement'
+import { CLUSTER_BADGE_HEIGHT, clusterBadgeBox, placeWithOverflow } from './clusterPlacement'
 
 interface Pin { x: number; id: string }
 
@@ -68,5 +68,35 @@ describe('placeWithOverflow', () => {
     expect(placed.map(p => p.x)).toEqual([0, 500])
     expect(badges).toHaveLength(2)
     expect(badges.map(b => b.count)).toEqual([2, 2])
+  })
+})
+
+describe('clusterBadgeBox', () => {
+  it('sits clear of the marker it annotates', () => {
+    const box = clusterBadgeBox(100, 50, 3)
+    expect(box.bx).toBeGreaterThan(100)
+    expect(box.by).toBe(50)
+    expect(box.h).toBe(CLUSTER_BADGE_HEIGHT)
+  })
+
+  it('widens for larger counts so the label cannot overflow its pill', () => {
+    const two = clusterBadgeBox(0, 0, 9).w
+    const three = clusterBadgeBox(0, 0, 12).w
+    const four = clusterBadgeBox(0, 0, 140).w
+    expect(three).toBeGreaterThan(two)
+    expect(four).toBeGreaterThan(three)
+  })
+
+  it('describes a box that a click at its centre lands inside', () => {
+    // Mirrors the canvas hit-test: x within [bx, bx + w], y within half the height.
+    const box = clusterBadgeBox(240, 90, 16)
+    const cx = box.bx + box.w / 2
+    const cy = box.by
+    expect(cx >= box.bx && cx <= box.bx + box.w).toBe(true)
+    expect(Math.abs(cy - box.by) < box.h / 2 + 2).toBe(true)
+  })
+
+  it('is deterministic — the drawn pill and the published hit-box come from one call', () => {
+    expect(clusterBadgeBox(17, 33, 7)).toEqual(clusterBadgeBox(17, 33, 7))
   })
 })

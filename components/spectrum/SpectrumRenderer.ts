@@ -8,7 +8,7 @@ import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
 import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalTechnology } from '@/data/professionalSpectrum'
-import { placeWithOverflow } from '@/lib/spectrum/clusterPlacement'
+import { clusterBadgeBox, placeWithOverflow } from '@/lib/spectrum/clusterPlacement'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { EDUCATIONAL_EXAMPLES, isEduExampleVisible, type EducationalExample } from '@/data/educationalExamples'
 import { useSpectrumStore } from '@/store/spectrumStore'
@@ -843,13 +843,11 @@ export class SpectrumRenderer {
     centerFreq: number,
     sink: ClusterBadge[]
   ): void {
-    const w = 14 + String(count).length * 6
-    const bx = x + 9
-    const by = badgeY
+    const { bx, by, w, h } = clusterBadgeBox(x, badgeY, count)
     sink.push({ bx, by, w, count, centerFreq })
     const g = this.bandPool.pop() ?? new Graphics()
     g.clear()
-    g.roundRect(bx, by - 7, w, 14, 7)
+    g.roundRect(bx, by - h / 2, w, h, h / 2)
       .fill({ color: 0x14203a, alpha: 0.92 })
       .stroke({ color: 0x7ab8ff, width: 1, alpha: 0.7 })
     container.addChild(g)

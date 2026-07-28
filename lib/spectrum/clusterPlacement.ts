@@ -15,6 +15,25 @@ export interface PlacedItem {
   x: number
 }
 
+/** Drawn height of a "+N" badge. */
+export const CLUSTER_BADGE_HEIGHT = 14
+
+/**
+ * Screen-space box of a "+N" badge, given the marker it sits next to.
+ *
+ * The renderer draws the badge from this and publishes the same box for the hit-test, so
+ * the two cannot drift apart — a badge you can see but not click (or the reverse) would be
+ * invisible to unit tests and easy to introduce by editing one of the two places.
+ */
+export function clusterBadgeBox(anchorX: number, badgeY: number, count: number) {
+  return {
+    bx: anchorX + 9,
+    by: badgeY,
+    w: 14 + String(count).length * 6,
+    h: CLUSTER_BADGE_HEIGHT,
+  }
+}
+
 export interface OverflowBadge<T> {
   /** The placed marker the badge is drawn next to. */
   anchor: T
