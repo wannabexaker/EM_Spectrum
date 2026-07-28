@@ -7,7 +7,7 @@ import { getLODLevel, getLODVisibility } from '@/lib/zoom/lodController'
 import { wavelengthToPixiColor, BAND_COLORS } from '@/lib/pixi/colorMapper'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { SPECTRUM_LANE_BY_ID, SPECTRUM_LANES, getBandLane, getFeatureLane } from '@/lib/spectrumLanes'
-import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalTechnology } from '@/data/professionalSpectrum'
+import { PROFESSIONAL_SUB_BANDS, PROFESSIONAL_TECH_OVERLAYS, type ProfessionalBand, type ProfessionalTechnology } from '@/data/professionalSpectrum'
 import { clusterBadgeBox, placeWithOverflow } from '@/lib/spectrum/clusterPlacement'
 import { isFeatureAllowedByDetailLayers, isFeatureVisibleInMode } from '@/lib/spectrum/detailLayerClassifier'
 import { EDUCATIONAL_EXAMPLES, isEduExampleVisible, type EducationalExample } from '@/data/educationalExamples'
@@ -735,7 +735,10 @@ export class SpectrumRenderer {
 
   private _drawProfessionalSubBands(container: Container, state: ZoomState, W: number, H: number): void {
     const minWidthForLabel = state.zoomLevel < 5 ? 56 : 34
-    const occupiedByLane = new Map<string, number>()
+    // Brackets always draw — they are ranges, and hiding one would lose the range itself.
+    // Only their labels compete for room, so the labels collapse into a counted badge
+    // instead of vanishing silently the way they used to.
+    const labelsByLane = new Map<string, { x: number; band: ProfessionalBand; y: number }[]>()
 
     for (const band of PROFESSIONAL_SUB_BANDS) {
       const x1 = freqToScreenX(band.frequencyMin, W, state.centerFrequency, state.zoomLevel)
@@ -758,20 +761,29 @@ export class SpectrumRenderer {
       g.moveTo(right, y + 10).lineTo(right, y + 20).stroke({ color, alpha: 0.28, width: 0.8 })
       container.addChild(g)
 
-      const lastRight = occupiedByLane.get(band.category) ?? -Infinity
-      const canLabel = width > minWidthForLabel && left - lastRight > 44
-      if (!canLabel) continue
+      if (width <= minWidthForLabel) continue
+      const list = labelsByLane.get(band.category) ?? []
+      list.push({ x: left + width / 2, band, y })
+      labelsByLane.set(band.category, list)
+    }
 
-      const label = this.labelPool.pop() ?? new Text({ text: '' })
-      label.text = state.zoomLevel >= 10 ? `${band.label} ${band.rangeLabel}` : band.label
-      label.x = left + width / 2
-      label.y = y + 30
-      label.anchor.set(0.5)
-      label.style.fontSize = state.zoomLevel >= 10 ? 10 : 9
-      label.style.fill = color
-      label.alpha = 0.88
-      container.addChild(label)
-      occupiedByLane.set(band.category, right)
+    for (const list of labelsByLane.values()) {
+      const { placed, badges } = placeWithOverflow(list, 44, p => p.band.label.length * 6)
+      for (const p of placed) {
+        const label = this.labelPool.pop() ?? new Text({ text: '' })
+        label.text = state.zoomLevel >= 10 ? `${p.band.label} ${p.band.rangeLabel}` : p.band.label
+        label.x = p.x
+        label.y = p.y + 30
+        label.anchor.set(0.5)
+        label.style.fontSize = state.zoomLevel >= 10 ? 10 : 9
+        label.style.fill = this._hexToPixi(p.band.color)
+        label.alpha = 0.88
+        container.addChild(label)
+      }
+      for (const { anchor, count } of badges) {
+        const centre = Math.sqrt(anchor.band.frequencyMin * anchor.band.frequencyMax)
+        this._drawClusterBadge(container, anchor.x, anchor.y + 30, count, centre, this.proClusters)
+      }
     }
   }
 

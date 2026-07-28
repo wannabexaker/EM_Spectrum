@@ -273,6 +273,59 @@ export function SpectrumCanvas() {
       : []),
   ], [visibleFeatures, allBands, activeMode, showApplications, showEM, eduHiddenDomains, eduVerifiedOnly])
 
+  // ─── Assistive-tech access to the canvas ──────────────────────────────
+  // The spectrum is a bitmap, so without this a screen reader is told only that a canvas
+  // exists. These give it the same three things a sighted user gets: what is on screen,
+  // that it changed, and a way to reach any of it.
+  const viewSpan = useMemo(() => {
+    if (!width) return null
+    return {
+      low: screenXToFreq(0, width, zoomState.centerFrequency, zoomState.zoomLevel),
+      high: screenXToFreq(width, width, zoomState.centerFrequency, zoomState.zoomLevel),
+    }
+  }, [width, zoomState.centerFrequency, zoomState.zoomLevel])
+
+  /** Markers whose position falls inside the current viewport, nearest the centre first. */
+  const inViewTargets = useMemo(() => {
+    if (!width) return []
+    return navTargets
+      .filter(t => {
+        const x = freqToScreenX(t.frequency, width, zoomState.centerFrequency, zoomState.zoomLevel)
+        return x >= 0 && x <= width
+      })
+      .sort((a, b) => a.frequency - b.frequency)
+      .slice(0, 40)
+  }, [navTargets, width, zoomState.centerFrequency, zoomState.zoomLevel])
+
+  const viewDescription = useMemo(() => {
+    const mode = activeMode === 'professional' ? 'Professional' : 'Educational'
+    const span = viewSpan
+      ? `showing ${formatFrequency(viewSpan.low)} to ${formatFrequency(viewSpan.high)}`
+      : 'loading'
+    return `${mode} view, centred on ${formatFrequency(zoomState.centerFrequency)}, zoom ${zoomState.zoomLevel.toFixed(1)}x, ${span}. ${inViewTargets.length} labelled ${inViewTargets.length === 1 ? 'entry' : 'entries'} in view.`
+  }, [activeMode, viewSpan, zoomState.centerFrequency, zoomState.zoomLevel, inViewTargets.length])
+
+  // Announce the view only once it settles — panning would otherwise talk over itself.
+  const [announcement, setAnnouncement] = useState('')
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAnnouncement(viewDescription), 700)
+    return () => window.clearTimeout(timer)
+  }, [viewDescription])
+
+  /** Opens a target's panel through the same store bridges the search results use. */
+  const openTarget = useCallback((target: NavTarget) => {
+    if (target.kind === 'feature') openFeatureCard(target.feature.id)
+    else if (target.kind === 'edu') openEducationalStory(target.example.id)
+    else if (target.kind === 'pro') openProCard(target.tech.id)
+    else openProCard(target.band.id)
+  }, [openFeatureCard, openEducationalStory, openProCard])
+
+  const targetLabel = (target: NavTarget) =>
+    target.kind === 'feature' ? target.feature.label
+    : target.kind === 'edu' ? target.example.label
+    : target.kind === 'pro' ? target.tech.label
+    : `${target.band.label} (ITU sub-band)`
+
   // Init renderer once canvas is mounted. Every device (including mobile) attempts
   // WebGL — modern phones handle PixiJS fine, and the timeout below is the safety
   // net that drops to the 2D Safe Mode only if init actually stalls or fails.
@@ -964,7 +1017,7 @@ export function SpectrumCanvas() {
         className={`w-full h-full touch-none cursor-none transition-opacity duration-300 ${
           isReady ? 'opacity-100' : 'opacity-0'
         }`}
-        aria-label="Electromagnetic spectrum visualization. Use arrow keys to pan, scroll to zoom."
+        aria-label={`Electromagnetic spectrum visualization. ${viewDescription} Use arrow keys to pan, Shift with arrows to step between entries, scroll to zoom.`}
         role="img"
         onPointerDown={handleCanvasPointerDown}
         onPointerMove={handleCanvasPointerMove}
@@ -976,6 +1029,32 @@ export function SpectrumCanvas() {
         onClick={handleClick}
         onContextMenu={e => e.preventDefault()}
       />
+
+      {/* Spoken when the view settles, so panning and zooming are perceivable. */}
+      <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
+
+      {/* Everything currently on the canvas, as real controls. Reveals itself on focus, so
+          it doubles as a keyboard jump list rather than being screen-reader-only. */}
+      <div className="sr-only sr-only-focusable">
+        <h2 className="sr-contents-title" id="spectrum-contents-heading">
+          Spectrum contents — {inViewTargets.length} in view
+        </h2>
+        {inViewTargets.length > 0 ? (
+          <ul className="sr-contents-list" aria-labelledby="spectrum-contents-heading">
+            {inViewTargets.map(target => (
+              <li key={target.id}>
+                <button type="button" onClick={() => openTarget(target)}>
+                  {targetLabel(target)} — {formatFrequency(target.frequency)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="sr-contents-list">
+            No labelled entries at this zoom. Zoom in, or press Shift with the arrow keys.
+          </p>
+        )}
+      </div>
 
       {/* Scope reticle — crosshair follows cursor */}
       {isReady && reticle && (

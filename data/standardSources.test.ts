@@ -56,6 +56,19 @@ describe('professional dataset provenance', () => {
     for (const url of urls) expect(url.startsWith('https://'), url).toBe(true)
   })
 
+  it('flags the allocations that are not worldwide', () => {
+    // Marking only the standard implies a global allocation; 902-928 MHz is Region 2 and
+    // 868 MHz is Europe, so a reader planning hardware around either would be misled.
+    const scoped = new Map(PROFESSIONAL_TECH_OVERLAYS.map(t => [t.id, t.regionScope]))
+    for (const id of ['ism-915', 'iot-868', 'ism-433', 'wifi-6e', 'wigig-60']) {
+      expect(scoped.get(id), id).toBeTruthy()
+    }
+    // Genuinely global allocations must not carry a caveat that would imply otherwise.
+    for (const id of ['pro-gps-l1', 'nfc-1356', 'aviation-vhf']) {
+      expect(scoped.get(id), id).toBeUndefined()
+    }
+  })
+
   it('cites the band nomenclature only for the bands ITU-R V.431 actually names', () => {
     // The optical and ionizing regions are conventional, not standardised, so borrowing
     // the ITU citation for them would overstate how settled their edges are.

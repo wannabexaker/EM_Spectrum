@@ -34,6 +34,8 @@ export interface ProfessionalTechnology {
   detail: string
   /** Governing standard, e.g. "IEEE 802.11ax" / "3GPP TS 38.104". */
   standard?: string
+  /** Where this allocation actually applies, when it is not the same worldwide. */
+  regionScope?: string
   confidence?: ScientificConfidence
   sources?: ProfessionalSource[]
 }
@@ -148,6 +150,33 @@ const TECH_STANDARDS: Record<string, string> = {
   'weather-radar-c': 'ITU-R M.1849',
 }
 
+/**
+ * Allocations that are not the same everywhere. Marking only the standard would imply a
+ * worldwide allocation, which for several of these is simply wrong — 902–928 MHz is a
+ * Region 2 band, and a reader planning EU hardware around it would be misled. Anything
+ * without an entry is treated as globally consistent enough not to warrant a caveat.
+ */
+const TECH_REGION_SCOPE: Record<string, string> = {
+  'ism-433': 'ITU Region 1 (Europe, Africa, Middle East) — not an ISM band in Region 2',
+  'iot-868': 'Europe (ETSI SRD). The equivalent US band is 902–928 MHz',
+  'ism-915': 'ITU Region 2 (Americas). Not available for ISM use in Europe',
+  'cb-27': 'Channel plans and power limits are set nationally',
+  'rc-40': 'National allocation; the band differs between countries',
+  'fm-88-108': '87.5–108 MHz across most of the world; Japan uses 76–95 MHz',
+  'am-broadcast': '10 kHz channel spacing in ITU Region 2, 9 kHz elsewhere',
+  'wifi-6e': '5925–7125 MHz in the US; the EU allows only 5925–6425 MHz',
+  'wifi-6ghz-low': 'Available in both the US and EU portions of the 6 GHz band',
+  'wifi-6ghz-mid': 'US only — above the EU 6425 MHz ceiling',
+  'wigig-60': '57–71 GHz in the US, 57–66 GHz in Europe',
+  'uhf-tv': 'Channel plans and the band ceiling differ by region after the 700/600 MHz reallocations',
+  'vhf-tv-i': 'Band I is no longer used for television in much of the world',
+  'lte-band1': 'Primarily Europe and Asia-Pacific; not deployed in North America',
+  'lte-band20': 'Europe (800 MHz digital dividend)',
+  'lte-band7': 'Widely deployed in Europe and Asia',
+  '5g-nr-n78': 'Primary mid-band in Europe and Asia; the US mid-band is split across n77 and CBRS',
+  '5g-nr-n79': 'Mainly Japan, China and Korea',
+}
+
 const RAW_TECH_OVERLAYS: ProfessionalTechnology[] = [
   { id: 'rfid-125', label: '125 kHz RFID', frequency: 125e3, bandwidth: 8e3, category: 'radio', color: '#70e1ff', minZoom: 9, detail: 'Low-frequency RFID access cards and animal tags' },
   { id: 'nfc-1356', label: '13.56 MHz NFC', frequency: 13.56e6, bandwidth: 1.8e6, category: 'radio', color: '#70e1ff', minZoom: 9, detail: 'NFC, ISO 14443 smart cards and HF RFID' },
@@ -226,6 +255,7 @@ export const PROFESSIONAL_TECH_OVERLAYS: ProfessionalTechnology[] = RAW_TECH_OVE
   return {
     ...tech,
     standard,
+    regionScope: TECH_REGION_SCOPE[tech.id],
     confidence: 'Scientifically Verified' as const,
     sources: sourcesForStandard(standard),
   }

@@ -104,6 +104,13 @@ export function ProInfoPopup({ target, x, y, canvasW, canvasH, onClose, onZoom }
 
       <p className="feature-popup-detail">{isBand ? target.band.uses : target.tech.detail}</p>
 
+      {!isBand && target.tech.regionScope && (
+        <div className="pro-popup-scope">
+          <span className="edu-popup-related-label">Where this applies</span>
+          <p>{target.tech.regionScope}</p>
+        </div>
+      )}
+
       {source.standard && (
         <div className="feature-popup-modulation">
           <span className="feature-mod-tag">{source.standard}</span>
