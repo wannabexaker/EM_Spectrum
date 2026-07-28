@@ -925,63 +925,61 @@ export class SpectrumRenderer {
     W: number,
     showLabel: boolean
   ): void {
-    {
-      const color = this._hexToPixi(tech.color)
-      const g = this.bandPool.pop() ?? new Graphics()
-      g.clear()
+    const color = this._hexToPixi(tech.color)
+    const g = this.bandPool.pop() ?? new Graphics()
+    g.clear()
 
-      if (tech.bandwidth && tech.bandwidth > 1000) {
-        const x1 = freqToScreenX(Math.max(1, tech.frequency - tech.bandwidth / 2), W, state.centerFrequency, state.zoomLevel)
-        const x2 = freqToScreenX(tech.frequency + tech.bandwidth / 2, W, state.centerFrequency, state.zoomLevel)
-        const width = Math.min(Math.max(Math.abs(x2 - x1), 2), 90)
-        g.rect(x - width / 2, y - 18, width, 36).fill({ color, alpha: 0.032 * visibility })
-      }
-
-      // Dashed reference line (3 segments: top, middle gap, bottom)
-      const lineAlpha = 0.32 * visibility
-      g.moveTo(x, y - 26).lineTo(x, y - 8).stroke({ color, alpha: lineAlpha, width: 0.8 })
-      g.moveTo(x, y - 4).lineTo(x, y + 4).stroke({ color, alpha: lineAlpha * 0.55, width: 0.7 })
-      g.moveTo(x, y + 8).lineTo(x, y + 22).stroke({ color, alpha: lineAlpha, width: 0.8 })
-
-      // Diamond (◆) marker — reference/non-selectable convention
-      const dr = 4.2 * visibility + 3.0 * (1 - visibility)  // stays readable at low vis
-      const diamondAlpha = 0.82 * visibility
-      g.moveTo(x,      y - 26 - dr)   // top
-       .lineTo(x + dr, y - 26)        // right
-       .lineTo(x,      y - 26 + dr)   // bottom
-       .lineTo(x - dr, y - 26)        // left
-       .closePath()
-       .fill({ color, alpha: diamondAlpha })
-      // Hollow inner cutout for depth
-      const ir = dr * 0.42
-      g.moveTo(x,      y - 26 - ir)
-       .lineTo(x + ir, y - 26)
-       .lineTo(x,      y - 26 + ir)
-       .lineTo(x - ir, y - 26)
-       .closePath()
-       .fill({ color: 0x050c18, alpha: 0.72 * visibility })
-      // Thin outline ring
-      g.moveTo(x,      y - 26 - dr)
-       .lineTo(x + dr, y - 26)
-       .lineTo(x,      y - 26 + dr)
-       .lineTo(x - dr, y - 26)
-       .closePath()
-       .stroke({ color, alpha: 0.55 * visibility, width: 0.7 })
-
-      container.addChild(g)
-
-      if (!showLabel) return
-
-      const label = this.labelPool.pop() ?? new Text({ text: '' })
-      label.text = tech.label
-      label.x = x
-      label.y = y - 39
-      label.anchor.set(0.5)
-      label.style.fontSize = 9
-      label.style.fill = color
-      label.alpha = Math.min(0.9, visibility)
-      container.addChild(label)
+    if (tech.bandwidth && tech.bandwidth > 1000) {
+      const x1 = freqToScreenX(Math.max(1, tech.frequency - tech.bandwidth / 2), W, state.centerFrequency, state.zoomLevel)
+      const x2 = freqToScreenX(tech.frequency + tech.bandwidth / 2, W, state.centerFrequency, state.zoomLevel)
+      const width = Math.min(Math.max(Math.abs(x2 - x1), 2), 90)
+      g.rect(x - width / 2, y - 18, width, 36).fill({ color, alpha: 0.032 * visibility })
     }
+
+    // Dashed reference line (3 segments: top, middle gap, bottom)
+    const lineAlpha = 0.32 * visibility
+    g.moveTo(x, y - 26).lineTo(x, y - 8).stroke({ color, alpha: lineAlpha, width: 0.8 })
+    g.moveTo(x, y - 4).lineTo(x, y + 4).stroke({ color, alpha: lineAlpha * 0.55, width: 0.7 })
+    g.moveTo(x, y + 8).lineTo(x, y + 22).stroke({ color, alpha: lineAlpha, width: 0.8 })
+
+    // Diamond (◆) marker — reference/non-selectable convention
+    const dr = 4.2 * visibility + 3.0 * (1 - visibility)  // stays readable at low vis
+    const diamondAlpha = 0.82 * visibility
+    g.moveTo(x,      y - 26 - dr)   // top
+     .lineTo(x + dr, y - 26)        // right
+     .lineTo(x,      y - 26 + dr)   // bottom
+     .lineTo(x - dr, y - 26)        // left
+     .closePath()
+     .fill({ color, alpha: diamondAlpha })
+    // Hollow inner cutout for depth
+    const ir = dr * 0.42
+    g.moveTo(x,      y - 26 - ir)
+     .lineTo(x + ir, y - 26)
+     .lineTo(x,      y - 26 + ir)
+     .lineTo(x - ir, y - 26)
+     .closePath()
+     .fill({ color: 0x050c18, alpha: 0.72 * visibility })
+    // Thin outline ring
+    g.moveTo(x,      y - 26 - dr)
+     .lineTo(x + dr, y - 26)
+     .lineTo(x,      y - 26 + dr)
+     .lineTo(x - dr, y - 26)
+     .closePath()
+     .stroke({ color, alpha: 0.55 * visibility, width: 0.7 })
+
+    container.addChild(g)
+
+    if (!showLabel) return
+
+    const label = this.labelPool.pop() ?? new Text({ text: '' })
+    label.text = tech.label
+    label.x = x
+    label.y = y - 39
+    label.anchor.set(0.5)
+    label.style.fontSize = 9
+    label.style.fill = color
+    label.alpha = Math.min(0.9, visibility)
+    container.addChild(label)
   }
 
   private _hexToPixi(hex: string): number {

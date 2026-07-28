@@ -227,6 +227,52 @@ export function SpectrumCanvas() {
     )
   }, [activeMode, allBands, detailDensity, detailLayers, zoomState.zoomLevel, showApplications, showEM, showSound])
 
+  // Everything the arrow keys can land on. RF/atlas features were the only navigable
+  // targets, so educational stories and professional allocations — the headline content of
+  // each mode — were reachable by mouse only. Memoised on what actually changes the set:
+  // the keyboard effect also re-runs on pan, resize and zoom, and rebuilding ~490 objects
+  // each time is wasted work.
+  const navTargets = useMemo<NavTarget[]>(() => [
+    ...visibleFeatures.map(feature => ({
+      kind: 'feature' as const,
+      id: feature.id,
+      frequency: feature.frequency_center,
+      laneId: getFeatureLane(feature, allBands).id,
+      feature,
+    })),
+    ...(activeMode === 'educational' && showApplications
+      ? EDUCATIONAL_EXAMPLES
+          .filter(example => isEduExampleVisible(example, eduHiddenDomains, eduVerifiedOnly))
+          .map(example => ({
+            kind: 'edu' as const,
+            id: `edu:${example.id}`,
+            frequency: example.frequency,
+            laneId: example.category,
+            example,
+          }))
+      : []),
+    ...(activeMode === 'professional' && showApplications
+      ? PROFESSIONAL_TECH_OVERLAYS.map(tech => ({
+          kind: 'pro' as const,
+          id: `pro:${tech.id}`,
+          frequency: tech.frequency,
+          laneId: tech.category,
+          tech,
+        }))
+      : []),
+    // ITU sub-band brackets are drawn whenever the EM layer is on, and are clickable —
+    // but were unreachable by keyboard, so the band nomenclature was mouse-only.
+    ...(activeMode === 'professional' && showEM
+      ? PROFESSIONAL_SUB_BANDS.map(band => ({
+          kind: 'proband' as const,
+          id: `proband:${band.id}`,
+          frequency: Math.sqrt(band.frequencyMin * band.frequencyMax),
+          laneId: band.category,
+          band,
+        }))
+      : []),
+  ], [visibleFeatures, allBands, activeMode, showApplications, showEM, eduHiddenDomains, eduVerifiedOnly])
+
   // Init renderer once canvas is mounted. Every device (including mobile) attempts
   // WebGL — modern phones handle PixiJS fine, and the timeout below is the safety
   // net that drops to the 2D Safe Mode only if init actually stalls or fails.
@@ -347,50 +393,6 @@ export function SpectrumCanvas() {
       const i = lanesOrdered.findIndex(l => centerFreq >= l.frequencyMin && centerFreq <= l.frequencyMax)
       return i === -1 ? 0 : i
     }
-
-    // Everything the arrow keys can land on. RF/atlas features were the only navigable
-    // targets, so educational stories and professional allocations — the headline content
-    // of each mode — were reachable by mouse only.
-    const navTargets: NavTarget[] = [
-      ...visibleFeatures.map(feature => ({
-        kind: 'feature' as const,
-        id: feature.id,
-        frequency: feature.frequency_center,
-        laneId: getFeatureLane(feature, allBands).id,
-        feature,
-      })),
-      ...(activeMode === 'educational' && showApplications
-        ? EDUCATIONAL_EXAMPLES
-            .filter(example => isEduExampleVisible(example, eduHiddenDomains, eduVerifiedOnly))
-            .map(example => ({
-              kind: 'edu' as const,
-              id: `edu:${example.id}`,
-              frequency: example.frequency,
-              laneId: example.category,
-              example,
-            }))
-        : []),
-      ...(activeMode === 'professional' && showApplications
-        ? PROFESSIONAL_TECH_OVERLAYS.map(tech => ({
-            kind: 'pro' as const,
-            id: `pro:${tech.id}`,
-            frequency: tech.frequency,
-            laneId: tech.category,
-            tech,
-          }))
-        : []),
-      // ITU sub-band brackets are drawn whenever the EM layer is on, and are clickable —
-      // but were unreachable by keyboard, so the band nomenclature was mouse-only.
-      ...(activeMode === 'professional' && showEM
-        ? PROFESSIONAL_SUB_BANDS.map(band => ({
-            kind: 'proband' as const,
-            id: `proband:${band.id}`,
-            frequency: Math.sqrt(band.frequencyMin * band.frequencyMax),
-            laneId: band.category,
-            band,
-          }))
-        : []),
-    ]
 
     function selectFeature(feat: (typeof visibleFeatures)[number]) {
       const store = useSpectrumStore.getState()
@@ -562,7 +564,7 @@ export function SpectrumCanvas() {
 
     window.addEventListener('keydown', handleNavKey, { capture: true })
     return () => window.removeEventListener('keydown', handleNavKey, { capture: true })
-  }, [allBands, visibleBands, visibleFeatures, commitZoom, width, height, activeMode, showApplications, showEM, eduHiddenDomains, eduVerifiedOnly])
+  }, [allBands, visibleBands, visibleFeatures, navTargets, commitZoom, width, height])
 
   // Resize — throttled by useViewport's ResizeObserver (100ms)
   useEffect(() => {
