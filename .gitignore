@@ -57,3 +57,6 @@ Docs/
 !docs/
 docs/*
 !docs/universal-vibrations-atlas.md
+
+# generated fixture for npm run sweep
+sweep-manifest.json

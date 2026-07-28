@@ -39,9 +39,11 @@ const EM_LANES = new Set(['radio', 'microwave', 'infrared', 'visible', 'ultravio
 // (firefly, GFP, bee UV, aurora, Cherenkov on the visible/UV lanes) is never flagged.
 const NON_EM = /whale|purr|cricket|woodpecker|wingbeat|mosquito|spider|termite|wolf|frog|cicada|dolphin|bat-echo|echolocation|ultrasound|-buzz|howl|drumming|thumping|headbang|footshak|jaw-tremor|ovipositor|substrate|elephant|hummingbird|electric-eel|electric-ray|weakly-electric|shark-electro|platypus|gecko|reptile|rabbit|hare|snake-jaw|rodent|voice|tremor|\becg\b|\beeg\b|atrial|ventricular|sleep-spindle|respiratory|heart-rate|heart|brain-wave|parkinson|magnetoreception|signature-whistle/i
 
-// Parse the flat entry list.
+// Parse the flat entry list. CRLF-tolerant: git normalises this file to CRLF on Windows,
+// which silently reduced the split to zero blocks — the validator then reported "clean" on
+// nothing at all, for every run. The floor check below makes that unrepeatable.
 const entries = []
-const blocks = src.split(/\n {2}\{\n/).slice(1)
+const blocks = src.split(/\r?\n {2}\{\r?\n/).slice(1)
 for (const b of blocks) {
   const id = (b.match(/id:\s*'([^']+)'/) || [])[1]
   if (!id) continue
@@ -89,6 +91,18 @@ const noConfidence = entries.filter(e => !e.hasConfidence).length
 
 console.log(`educational-data: ${entries.length} entries`)
 console.log(`  by lane: ${Object.entries(byLane).map(([k, v]) => `${k}=${v.length}`).join('  ')}`)
+
+// A validator that parses nothing must never report success. This is not a hypothetical:
+// a line-ending change silently emptied the parse and every run said "clean" afterwards.
+const MIN_EXPECTED = 100
+if (entries.length < MIN_EXPECTED) {
+  console.log(
+    `\n✗ PARSE FAILURE: found ${entries.length} entries, expected at least ${MIN_EXPECTED}.` +
+    `\n   The file format changed and this script is no longer reading it — fix the parser` +
+    `\n   rather than the threshold, or the lane invariant goes unchecked.`
+  )
+  process.exit(1)
+}
 
 if (errors.length) {
   console.log(`\n✗ HARD ERRORS (frequency outside lane) — ${errors.length}:`)
