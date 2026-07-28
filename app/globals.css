@@ -1744,6 +1744,10 @@ html, body {
     width: auto;
     max-height: 62vh;
     border-radius: 14px;
+    /* Above the ruler overlay: as a popover anchored inside the bar it sat below it, so
+       tick labels drew straight through the saved rows. */
+    z-index: 150;
+    background: rgba(5, 8, 18, 0.99);
   }
   .hud-saved-list { max-height: 52vh; padding: 0.4rem; gap: 0.3rem; }
   .hud-saved-link { padding: 0.62rem 0.7rem; }
