@@ -1625,11 +1625,22 @@ html, body {
 
 /* Phone */
 @media (max-width: 640px) {
-  .spectrum-header { gap: 0.35rem; padding: 0 0.5rem; min-height: 44px; }
+  /* The header was eating better than a third of a phone screen: a full-width search row,
+     a row of unlabelled colour dots, then the modes. Tighten every row and trade the long
+     layer names for short ones rather than for nothing. */
+  .spectrum-header { gap: 0.3rem; padding: 0.25rem 0.5rem; min-height: 0; }
   .header-logo { display: none; }
-  .layer-btn span:not(.layer-dot) { display: none; }
+  .layer-btn .layer-label { display: none; }
+  .layer-btn .layer-label-short { display: inline; font-size: 0.6rem; letter-spacing: 0.01em; }
+  .layer-btn { min-height: 28px; padding: 0.2rem 0.5rem; gap: 0.28rem; font-size: 0.6rem; }
+  .layer-dot { width: 6px; height: 6px; }
   .mode-btn { font-size: 0.62rem; padding: 0.18rem 0.45rem; }
+  .density-level-btn { min-width: 38px; height: 24px; font-size: 0.55rem; }
+  .search-input { min-height: 34px; font-size: 0.74rem; }
   .region-toggle { display: none; }
+
+  /* Lane chips are pinned to the right edge and were landing on top of the pins. */
+  .category-legend { transform: scale(0.82); transform-origin: right center; opacity: 0.9; }
 
   .hud-bar {
     grid-template-columns: 1fr;
@@ -1639,15 +1650,36 @@ html, body {
   }
   .hud-readout { justify-content: center; gap: 0.5rem; }
   .hud-value { font-size: 0.88rem; }
-  .hud-center { display: none; }
+
+  /* Zoom was hidden outright on phones — no presets, no readout — so the only way to
+     change scale was a pinch, with nothing telling you where you had landed. Keep the
+     row, drop only the parts that genuinely need a pointer (the hover probe) or a wide
+     screen (the professional readout). */
+  .hud-center {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 0;
+  }
+  .hud-center .hud-probe-detail,
+  .hud-center .hud-lod,
+  .hud-center .hud-pro-readout { display: none; }
+  .hud-zoom { font-size: 0.72rem; }
+
   .hud-actions {
     grid-column: 1 / -1;
     justify-content: center;
     flex-wrap: wrap;
     gap: 0.3rem;
   }
-  .zoom-indicator { display: none; }
+  .zoom-indicator { display: flex; gap: 0.2rem; }
+  .zoom-pill { min-width: 30px; height: 26px; font-size: 0.66rem; }
   .hud-probe-detail strong { font-size: 0.7rem; }
+
+  /* This caption sits mid-canvas. On a wide screen it is out of the way; on a phone it
+     lands squarely on the lanes and covers pins. */
+  .canvas-context-badge { display: none; }
 
   .side-panel { width: 100vw; }
 
@@ -2189,6 +2221,9 @@ html, body {
   color: rgba(159, 176, 204, 0.75);
 }
 .sr-contents-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; list-style: none; padding: 0; }
+
+/* Short layer labels exist only for the phone breakpoint. */
+.layer-label-short { display: none; }
 .sr-contents-list button {
   text-align: left;
   font-size: 12px;

@@ -14,7 +14,9 @@
     "validate:data": "node scripts/validate-educational-data.mjs",
     "check:sources": "node scripts/check-sources.mjs",
     "capture:og": "node scripts/capture-og.mjs",
-    "sweep": "vitest run scripts/sweep-manifest.gen.test.ts && node scripts/live-sweep.mjs"
+    "sweep": "vitest run scripts/sweep-manifest.gen.test.ts && node scripts/live-sweep.mjs",
+    "sweep:all": "vitest run scripts/sweep-manifest.gen.test.ts && node scripts/live-sweep.mjs --all",
+    "cross-browser": "node scripts/cross-browser.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -38,9 +40,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "axe-core": "^4.12.1",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.10",
     "happy-dom": "^20.10.6",
+    "playwright": "^1.62.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

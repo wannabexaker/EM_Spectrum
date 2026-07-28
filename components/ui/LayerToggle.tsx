@@ -6,6 +6,9 @@ import { useSpectrumStore } from '@/store/spectrumStore'
 interface LayerDef {
   key: 'EM' | 'sound' | 'applications' | 'hazards'
   label: string
+  /** Shown instead of `label` on phones, where the full name does not fit but a bare
+   *  coloured dot leaves you guessing what the button does. */
+  shortLabel: string
   color: string
   tooltip: string
 }
@@ -14,24 +17,28 @@ const LAYERS: LayerDef[] = [
   {
     key: 'EM',
     label: 'EM Spectrum',
+    shortLabel: 'EM',
     color: '#00d4ff',
     tooltip: 'Show/hide electromagnetic band tracks',
   },
   {
     key: 'sound',
     label: 'Sound Waves',
+    shortLabel: 'Sound',
     color: '#ffd60a',
     tooltip: 'Show/hide acoustic frequency overlay',
   },
   {
     key: 'applications',
     label: 'Applications',
+    shortLabel: 'Apps',
     color: '#00ff88',
     tooltip: 'Show/hide technology markers',
   },
   {
     key: 'hazards',
     label: 'Hazards',
+    shortLabel: 'Risk',
     color: '#ff4444',
     tooltip: 'Show/hide ionizing radiation indicators',
   },
@@ -79,6 +86,7 @@ export function LayerToggle() {
           >
             <span className="layer-dot" />
             <span className="layer-label">{layer.label}</span>
+            <span className="layer-label-short" aria-hidden>{layer.shortLabel}</span>
             {!active && <span className="layer-off-mark" aria-hidden="true">x</span>}
             {toast?.key === layer.key && (
               <span className="layer-toast" role="status">

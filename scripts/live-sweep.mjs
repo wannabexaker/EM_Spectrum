@@ -16,7 +16,9 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const BASE = (process.argv[2] ?? 'https://wannabexaker.github.io/em-spectrum').replace(/\/$/, '')
+// Flags must not be mistaken for the base URL — `--all` used to be parsed as one.
+const positional = process.argv.slice(2).filter(a => !a.startsWith('--'))
+const BASE = (positional[0] ?? 'https://wannabexaker.github.io/em-spectrum').replace(/\/$/, '')
 const PAGE = `${BASE}/spectrum/`
 const PORT = 9342
 const manifest = JSON.parse(readFileSync(join(ROOT, 'sweep-manifest.json'), 'utf8'))
@@ -139,11 +141,15 @@ try {
     return null
   })
 
-  // Features are the largest set; sweep a broad stratified sample across the spectrum
-  // rather than all of them, so the run stays inside a sane wall-clock.
+  // Features are the largest set. Default to a stratified sample so a routine run stays
+  // inside a sane wall-clock; `--all` opens every one of them.
+  const sweepAll = process.argv.includes('--all')
   const step = Math.max(1, Math.floor(manifest.features.length / 60))
-  const featureSample = manifest.features.filter((_, i) => i % step === 0)
-  await sweepGroup(`features (sample of ${manifest.features.length})`, featureSample, 'feature', (item, text) => {
+  const featureSample = sweepAll ? manifest.features : manifest.features.filter((_, i) => i % step === 0)
+  const featureLabel = sweepAll
+    ? `features (all ${manifest.features.length})`
+    : `features (sample of ${manifest.features.length})`
+  await sweepGroup(featureLabel, featureSample, 'feature', (item, text) => {
     if (text === 'NO_PANEL') return 'panel never opened'
     if (!looseMatch(text, item.label)) return `panel shows "${text.slice(0, 40)}"`
     return null
