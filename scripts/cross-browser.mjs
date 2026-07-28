@@ -76,18 +76,52 @@ async function run(engineName, launcher, launchOpts = {}) {
       record(engineName, form, 'screen-reader contents list populated', p.srList > 0, `${p.srList} entries`)
       record(engineName, form, 'live region present', p.liveRegion === true)
       if (form === 'phone') {
-        record(engineName, form, 'toolbar wraps instead of clipping', p.headerWraps === 'wrap', p.headerWraps)
-        const reachable = await page.evaluate(`(() => {
+        // The header is deliberately one non-wrapping row now: search, mode, menu button.
+        // Everything else lives behind the button, so the contract to check is that the
+        // row fits, and that opening the menu actually surfaces the rest.
+        const bar = await page.evaluate(`(() => {
           const vw = window.innerWidth;
-          const names = ['Educational','Professional','Hz','λ'];
-          return names.every(n => {
-            const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === n);
-            if (!b) return false;
-            const r = b.getBoundingClientRect();
-            return r.left >= -1 && r.right <= vw + 1 && r.width > 0;
+          const fits = el => { if (!el) return false; const r = el.getBoundingClientRect(); return r.left >= -1 && r.right <= vw + 1 && r.width > 0; };
+          const byText = t => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === t);
+          return JSON.stringify({
+            menuBtn: !!document.querySelector('.header-menu-btn'),
+            modeFits: fits(byText('Educational')) && fits(byText('Professional')),
+            searchFits: fits(document.querySelector('.search-container') || document.querySelector('input')),
+            headerRows: Math.round((document.querySelector('.spectrum-header')?.getBoundingClientRect().height ?? 0)),
           });
         })()`)
-        record(engineName, form, 'every mode/unit control inside the viewport', reachable === true)
+        const b = JSON.parse(bar)
+        record(engineName, form, 'menu button present', b.menuBtn === true)
+        record(engineName, form, 'search and mode fit the top row', b.modeFits && b.searchFits)
+        record(engineName, form, 'header is one compact row', b.headerRows > 0 && b.headerRows < 70, `${b.headerRows}px`)
+
+        const menu = await page.evaluate(`(async () => {
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          document.querySelector('.header-menu-btn')?.click();
+          await sleep(500);
+          const nav = document.getElementById('spectrum-controls');
+          const open = nav && getComputedStyle(nav).display !== 'none';
+          const groups = [...document.querySelectorAll('.header-controls .menu-group')]
+            .filter(g => getComputedStyle(g).display !== 'none')
+            .map(g => g.getAttribute('data-label'));
+          const r = nav?.getBoundingClientRect();
+          const narrow = r ? r.width < window.innerWidth - 20 : false;
+          const unitInside = (() => {
+            const hz = [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Hz');
+            return !!hz && !!hz.closest('#spectrum-controls');
+          })();
+          // A pick closes it and hands the screen back.
+          [...document.querySelectorAll('.header-controls .density-level-btn')][2]?.click();
+          await sleep(500);
+          const closed = nav && getComputedStyle(nav).display === 'none';
+          return JSON.stringify({ open, groups, narrow, unitInside, closed });
+        })()`)
+        const m = JSON.parse(menu)
+        record(engineName, form, 'menu opens', m.open === true)
+        record(engineName, form, 'menu is narrower than the screen', m.narrow === true)
+        record(engineName, form, 'menu groups are labelled', (m.groups ?? []).length >= 5, (m.groups ?? []).join(','))
+        record(engineName, form, 'unit controls live in the menu', m.unitInside === true)
+        record(engineName, form, 'choosing an option closes the menu', m.closed === true)
       }
 
       // A deep-linked card must open and describe the right entry.

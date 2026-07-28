@@ -8,6 +8,7 @@ import { formatFrequency, formatWavelength, freqToWavelength, MIN_ZOOM, MAX_ZOOM
 import { getLODLevel } from '@/lib/zoom/lodController'
 import { SPECTRUM_LANE_BY_ID } from '@/lib/spectrumLanes'
 import { useSpectrumData } from '@/hooks/useSpectrumData'
+import { CursorFrequencyToggle } from '@/components/ui/CursorFrequencyToggle'
 import { EDUCATIONAL_EXAMPLE_MAP, type EducationalExample } from '@/data/educationalExamples'
 import type { FrequencyFeature, SpectrumBand } from '@/types/spectrum'
 const ZOOM_PRESETS = [1, 2, 3, 5, 10]
@@ -251,15 +252,9 @@ export function FrequencyHUD() {
             </button>
           ))}
         </div>
-        <button
-          className={`hud-cursor-toggle ${showCursorFrequency ? 'active' : ''}`}
-          onClick={toggleCursorFrequency}
-          title="Show frequency next to cursor"
-          aria-label="Toggle cursor frequency label"
-          aria-pressed={showCursorFrequency}
-        >
-          cursor Hz
-        </button>
+        {/* Pointer-only, so the phone breakpoint hides this copy and shows the one in
+            the controls menu instead. */}
+        <CursorFrequencyToggle className="hud-cursor-inline" />
         <div className="hud-saved-wrap" ref={savedPanelRef}>
           <button
             className={`hud-saved-toggle ${savedOpen ? 'active' : ''}`}

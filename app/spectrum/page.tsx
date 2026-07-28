@@ -14,6 +14,7 @@ import { ProLayerFilter } from '@/components/ui/ProLayerFilter'
 import { OnboardingTour } from '@/components/ui/OnboardingTour'
 import { DetailDensityToggle } from '@/components/ui/DetailDensityToggle'
 import { UnitSwitcher } from '@/components/ui/UnitSwitcher'
+import { CursorFrequencyToggle } from '@/components/ui/CursorFrequencyToggle'
 import { RegulatoryRegionToggle } from '@/components/ui/RegulatoryRegionToggle'
 import { FrequencyHUD } from '@/components/ui/FrequencyHUD'
 import { useSpectrumStore } from '@/store/spectrumStore'
@@ -116,6 +117,9 @@ export default function SpectrumPage() {
           </div>
           <div className="menu-group" data-label="Units">
             <UnitSwitcher />
+          </div>
+          <div className="menu-group menu-group-display" data-label="Display">
+            <CursorFrequencyToggle />
           </div>
           {/* Region was display:none on phones, which quietly pinned every card's legal
               notes to "All". In the menu it works again. */}
