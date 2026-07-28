@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "validate:data": "node scripts/validate-educational-data.mjs",
-    "check:sources": "node scripts/check-sources.mjs"
+    "check:sources": "node scripts/check-sources.mjs",
+    "capture:og": "node scripts/capture-og.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
