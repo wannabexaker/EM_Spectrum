@@ -18,11 +18,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
+// Browser zoom stays available. It was disabled to stop pinch fighting the canvas's own
+// zoom, but the canvas already sets touch-action: none, so gestures over it never reach
+// the browser — while blocking it page-wide left anyone who needs to magnify the UI with
+// no way to do it (WCAG 1.4.4).
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 }
 
 // Canonical and social URLs are built from this. It pointed at a vercel.app host the app

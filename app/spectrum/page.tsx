@@ -43,6 +43,9 @@ export default function SpectrumPage() {
 
   return (
     <div className="spectrum-layout">
+      {/* The page had no level-one heading, so assistive tech had nothing naming it. */}
+      <h1 className="sr-only">Electromagnetic spectrum visualizer</h1>
+
       {/* Header */}
       <header className="spectrum-header" role="banner">
         <Link href="/" className="header-logo" aria-label="EM Spectrum home">
