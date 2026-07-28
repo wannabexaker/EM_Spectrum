@@ -21,7 +21,10 @@ import { sourcesForStandard } from './standardSources'
 export const TECHNOLOGY_PROFILES: Record<string, { standard: string; detail?: string }> = {
   'gps-l1': {
     standard: 'IS-GPS-200',
-    detail: 'GPS L1 C/A signal at 1575.42 MHz uses CDMA spread-spectrum with a 1.023 Mcps PRN code. The -130 dBm received signal power (20 dB below noise floor) requires 2–16 ms coherent integration. Modernized L1C adds a pilot channel for improved acquisition.',
+    // Merged: the curated write-up covers GPS alone, but this entry is the shared 1575.42
+    // MHz centre, so the Galileo and SBAS signals it also carries are kept from the
+    // original text rather than dropped.
+    detail: 'GPS L1 C/A signal at 1575.42 MHz uses CDMA spread-spectrum with a 1.023 Mcps PRN code. The -130 dBm received signal power (20 dB below noise floor) requires 2–16 ms coherent integration. Modernized L1C adds a pilot channel for improved acquisition. The same centre frequency carries Galileo E1 (CBOC) and SBAS (WAAS/EGNOS/MSAS), under a protected aeronautical radionavigation allocation.',
   },
   'gps-l2': {
     standard: 'IS-GPS-200',
@@ -41,11 +44,13 @@ export const TECHNOLOGY_PROFILES: Record<string, { standard: string; detail?: st
   },
   'aviation-vor-ils': {
     standard: 'ICAO Annex 10',
-    detail: 'VOR (VHF Omnidirectional Range) provides bearing information to aircraft using two 30 Hz AM signals: one omnidirectional, one rotating. Phase difference gives magnetic bearing with ±1.4° accuracy. About 3000 VOR stations remain worldwide, being phased out by GPS.',
+    // Merged: ILS is a separate system sharing the band, and the entry is named for both.
+    detail: 'VOR (VHF Omnidirectional Range) provides bearing information to aircraft using two 30 Hz AM signals: one omnidirectional, one rotating. Phase difference gives magnetic bearing with ±1.4° accuracy. About 3000 VOR stations remain worldwide, being phased out by GPS. The same 108–118 MHz band carries the ILS localizer on odd-tenth channels, with VOR on the even tenths, paired with the ILS glideslope at 329–335 MHz.',
   },
   'marine-radar-xband': {
     standard: 'IMO Resolution MSC.192(79)',
-    detail: 'X-band marine radar (9.3–9.5 GHz) provides fine resolution for navigation, collision avoidance, and harbor approach. 3 cm wavelength allows compact antennas. Typically uses pulse or FMCW waveform; range 24–72 nmi. Higher rain attenuation than S-band but better target resolution.',
+    // Merged: the entry is named for airport radar too, which the marine-only write-up drops.
+    detail: 'X-band marine radar (9.3–9.5 GHz) provides fine resolution for navigation, collision avoidance, and harbor approach. 3 cm wavelength allows compact antennas. Typically uses pulse or FMCW waveform; range 24–72 nmi. Higher rain attenuation than S-band but better target resolution. The same band carries airport surface-movement radar and weather radar, at 25–50 kW peak power.',
   },
   'cb-band-overview': {
     standard: 'FCC Part 95 Subpart D',
@@ -57,7 +62,9 @@ export const TECHNOLOGY_PROFILES: Record<string, { standard: string; detail?: st
   },
   'dab-band3': {
     standard: 'ETSI EN 300 401',
-    detail: 'DAB+ (Digital Audio Broadcasting) uses OFDM multiplexing in Band III (174–240 MHz) and L-Band (1452–1492 MHz). Each multiplex carries 6–18 stations with better audio quality than AM and near-FM quality at lower bit rates. Mandatory in new cars in Norway, Germany, and UK.',
+    // 174–230, not the 174–240 the write-up carried: that is the entry's own range, the
+    // ITU Band III definition, and what the original text said.
+    detail: 'DAB+ (Digital Audio Broadcasting) uses OFDM multiplexing in Band III (174–230 MHz) and L-Band (1452–1492 MHz). Each multiplex carries 6–18 stations with better audio quality than AM and near-FM quality at lower bit rates. Mandatory in new cars in Norway, Germany, and UK.',
   },
   'nr5g-mmwave-39': {
     standard: '3GPP Release 15',
@@ -67,10 +74,10 @@ export const TECHNOLOGY_PROFILES: Record<string, { standard: string; detail?: st
     standard: '3GPP Release 15',
     detail: '5G NR n78 band (3.3–3.8 GHz) is the primary 5G mid-band worldwide. Offers up to 100 MHz channel bandwidth, Massive MIMO (64T64R), and sub-1 ms latency. Balance of coverage and capacity; key for mid-tier 5G deployment.',
   },
-  'uhf-rfid-902': {
-    standard: 'EPCglobal Gen2 / ISO 18000-6C',
-    detail: "Passive UHF RFID tags (860–960 MHz) are powered by the reader's RF field via backscatter communication. Read range up to 12 m. Used extensively in supply chain logistics, retail inventory, and library management. EPC Gen2 supports anti-collision for 1000+ tags/second.",
-  },
+  // Standard only: this pin marks the lower edge of the US 902–928 MHz band, so its
+  // original text — which names everything sharing that edge — describes the marker
+  // better than a write-up about the 860–960 MHz RFID system as a whole.
+  'uhf-rfid-902': { standard: 'EPCglobal Gen2 / ISO 18000-6C' },
   'bluetooth-classic-overview': {
     standard: 'Bluetooth 5.0 (BR/EDR/BLE)',
     detail: 'Bluetooth uses 79 channels at 1 MHz spacing (or 40 channels for BLE) in the 2.4 GHz ISM band, with adaptive frequency hopping (FHSS) to avoid WiFi interference. BT 5.0 achieves 2 Mbps data rate and 200m range in open space.',
