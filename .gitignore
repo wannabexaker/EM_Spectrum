@@ -60,3 +60,7 @@ docs/*
 
 # generated fixture for npm run sweep
 sweep-manifest.json
+
+# ad-hoc capture output from the test scripts
+saved-sheet.png
+.og-shot.png
