@@ -33,6 +33,12 @@ const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   `https://wannabexaker.github.io${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}`
 
+// Fully qualified on purpose. Next resolves a root-relative metadata image against
+// metadataBase's *origin* only, dropping its path — under the portfolio's
+// basePath: '/em-spectrum' that produced /og/og-main.jpg, which 404s, because the asset
+// actually ships at /em-spectrum/og/og-main.jpg.
+const ogImageUrl = `${siteUrl}/og/og-main.jpg`
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: 'EM Spectrum Visualizer — Explore Every Frequency',
@@ -48,19 +54,21 @@ export const metadata: Metadata = {
     'ultraviolet',
     'microwave',
   ],
-  // No `images` here on purpose: /og/og-main.png was referenced but never existed
-  // (public/og/ is empty), so every share advertised a preview image that 404s. Better to
-  // degrade to a clean title/description card than to promise a broken image. Re-add once
-  // a real screenshot of the visualizer is captured, and switch back to summary_large_image.
+  // og-main.jpg is a real 1200x630 capture of the visualizer's own canvas — labelled
+  // phenomena with their "+N" density badges across the lanes — not a mockup. The previous
+  // reference pointed at an og-main.png that never existed, so every share advertised a
+  // preview image that 404d.
   openGraph: {
     title: 'EM Spectrum Visualizer',
     description: 'Infinite zoom visualization of the electromagnetic spectrum — from 10⁻¹⁴ Hz to 10²⁶ Hz',
+    images: [{ url: ogImageUrl, width: 1200, height: 630, alt: 'The electromagnetic spectrum rendered across eight logarithmic lanes' }],
     type: 'website',
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: 'EM Spectrum Visualizer',
     description: 'Explore every frequency in the universe',
+    images: [ogImageUrl],
   },
   robots: {
     index: true,
