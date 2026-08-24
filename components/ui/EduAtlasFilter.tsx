@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useSpectrumStore } from '@/store/spectrumStore'
-import { EDUCATIONAL_DOMAINS, EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
+import { ATLAS_DOMAINS, atlasConfidenceCounts } from '@/lib/spectrum/atlasFilter'
 import type { ScientificConfidence, UniversalVibrationCategory } from '@/types/spectrum'
 
 const DOMAIN_LABEL: Record<UniversalVibrationCategory, string> = {
@@ -35,13 +35,7 @@ const CONFIDENCE_COLOR: Record<ScientificConfidence, string> = {
 
 // Confidence levels actually present in the dataset, ordered by the rigour scale.
 const CONFIDENCE_ORDER = Object.keys(CONFIDENCE_COLOR) as ScientificConfidence[]
-const PRESENT_CONFIDENCE = (() => {
-  const counts = new Map<ScientificConfidence, number>()
-  for (const ex of EDUCATIONAL_EXAMPLES) {
-    if (ex.confidence) counts.set(ex.confidence, (counts.get(ex.confidence) ?? 0) + 1)
-  }
-  return CONFIDENCE_ORDER.filter(c => counts.has(c)).map(c => ({ level: c, count: counts.get(c)! }))
-})()
+const PRESENT_CONFIDENCE = atlasConfidenceCounts(CONFIDENCE_ORDER)
 
 export function EduAtlasFilter() {
   const activeMode = useSpectrumStore(s => s.activeMode)
@@ -95,7 +89,7 @@ export function EduAtlasFilter() {
           </div>
 
           <div className="edu-filter-domains">
-            {EDUCATIONAL_DOMAINS.map(({ domain, count }) => {
+            {ATLAS_DOMAINS.map(({ domain, count }) => {
               const on = !hidden.includes(domain)
               return (
                 <button

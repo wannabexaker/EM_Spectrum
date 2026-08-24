@@ -20,6 +20,7 @@ import { CanvasContextBadge } from '@/components/ui/CanvasContextBadge'
 import { EducationalPopup } from '@/components/ui/EducationalPopup'
 import { ProInfoPopup, type ProTarget } from '@/components/ui/ProInfoPopup'
 import { EDUCATIONAL_EXAMPLES, EDUCATIONAL_EXAMPLE_MAP, isEduExampleVisible } from '@/data/educationalExamples'
+import { isFeatureAtlasVisible } from '@/lib/spectrum/atlasFilter'
 import { getCardParam, setCardParam } from '@/lib/deeplink/urlState'
 import { canvasFontFamily } from '@/lib/pixi/canvasFont'
 import { probeHardwareWebGL } from '@/lib/pixi/webglSupport'
@@ -223,9 +224,10 @@ export function SpectrumCanvas() {
         if (lane.id === 'sound') return showSound
         return showEM
       })() &&
+      isFeatureAtlasVisible(feature, eduHiddenDomains, eduVerifiedOnly) &&
       zoomState.zoomLevel >= Math.max(1, feature.minZoom * zoomBoost) * 0.58
     )
-  }, [activeMode, allBands, detailDensity, detailLayers, zoomState.zoomLevel, showApplications, showEM, showSound])
+  }, [activeMode, allBands, detailDensity, detailLayers, zoomState.zoomLevel, showApplications, showEM, showSound, eduHiddenDomains, eduVerifiedOnly])
 
   // Everything the arrow keys can land on. RF/atlas features were the only navigable
   // targets, so educational stories and professional allocations — the headline content of
