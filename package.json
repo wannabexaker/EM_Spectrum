@@ -16,7 +16,8 @@
     "capture:og": "node scripts/capture-og.mjs",
     "sweep": "vitest run scripts/sweep-manifest.gen.test.ts && node scripts/live-sweep.mjs",
     "sweep:all": "vitest run scripts/sweep-manifest.gen.test.ts && node scripts/live-sweep.mjs --all",
-    "cross-browser": "node scripts/cross-browser.mjs"
+    "cross-browser": "node scripts/cross-browser.mjs",
+    "serve:out": "node scripts/static-server.mjs out 4176"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

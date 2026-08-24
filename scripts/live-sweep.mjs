@@ -82,6 +82,14 @@ try {
   /** Evaluates in the page and returns the value. */
   const evaluate = async expression => {
     const r = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+    // A page-side throw comes back as exceptionDetails, with the thrown value sitting
+    // in result. Returning it silently turned every in-page error into an opaque
+    // "[object Object] is not valid JSON" crash at the JSON.parse two lines later,
+    // which cost two full sweep runs to diagnose. Surface it instead.
+    if (r.exceptionDetails) {
+      const d = r.exceptionDetails
+      throw new Error(`page-side error: ${d.exception?.description ?? d.text ?? JSON.stringify(d).slice(0, 200)}`)
+    }
     return r.result?.value
   }
 
@@ -104,16 +112,43 @@ try {
   // ── Every catalogued entry, one at a time ──────────────────────────────
   // Deep links are the only in-page route that opens an arbitrary card, so each entry
   // gets its own navigation. The panel's own text is compared against the manifest.
+
+  /**
+   * Polls for the deep-linked card instead of sleeping a fixed interval.
+   * A flat 1700ms wait reported six perfectly healthy entries as "panel never opened"
+   * on a cold local server while passing against the warm live site — the entries were
+   * fine, the deadline was not. The location.search guard stops the poll reading the
+   * PREVIOUS entry's card in the moment between navigate and commit, which would have
+   * turned one flake into a silent wrong-label pass.
+   */
+  const waitForPanel = async (query, deadlineMs = 8000) => {
+    const started = Date.now()
+    while (Date.now() - started < deadlineMs) {
+      // Whitespace is normalised on the Node side, not inside the page expression.
+      // That expression travels as a template literal, where a lone \s degrades to a
+      // plain "s" — the regex would then strip every letter s out of the panel text
+      // and every label comparison below would quietly compare mangled strings.
+      const raw = await evaluate(`(() => {
+        if (!location.search.includes(${JSON.stringify(query)})) return 'STALE';
+        const d = document.querySelector('[role=dialog]');
+        return d ? d.innerText.slice(0, 600) : 'NO_PANEL';
+      })()`)
+      if (raw && raw !== 'NO_PANEL' && raw !== 'STALE') {
+        const t = raw.replace(/\s+/g, ' ').trim().slice(0, 400)
+        if (t.length > 3) return t
+      }
+      await sleep(150)
+    }
+    return 'NO_PANEL'
+  }
+
   const sweepGroup = async (label, items, param, expect) => {
     let checked = 0
     const problems = []
     for (const item of items) {
-      await go(`${PAGE}?${param}=${encodeURIComponent(item.id)}`, 1700)
-      const got = await evaluate(`(() => {
-        const d = document.querySelector('[role=dialog]');
-        if (!d) return 'NO_PANEL';
-        return d.innerText.replace(/\\s+/g, ' ').slice(0, 400);
-      })()`)
+      const query = `${param}=${encodeURIComponent(item.id)}`
+      await call('Page.navigate', { url: `${PAGE}?${query}` })
+      const got = await waitForPanel(query)
       checked++
       const verdict = expect(item, got ?? '')
       if (verdict) problems.push(`${item.id}: ${verdict}`)
