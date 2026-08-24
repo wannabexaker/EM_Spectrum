@@ -45,7 +45,7 @@ let educationalFuseIndex: Fuse<EducationalExample> | null = null
 let proBandFuseIndex: Fuse<ProfessionalBand> | null = null
 let proTechFuseIndex: Fuse<ProfessionalTechnology> | null = null
 
-export function buildSearchIndex(bands: SpectrumBand[]): void {
+function buildSearchIndex(bands: SpectrumBand[]): void {
   fuseIndex = new Fuse(bands, {
     keys: [
       { name: 'label', weight: 0.4 },
@@ -58,7 +58,7 @@ export function buildSearchIndex(bands: SpectrumBand[]): void {
   })
 }
 
-export function buildFeatureSearchIndex(): void {
+function buildFeatureSearchIndex(): void {
   featureFuseIndex = new Fuse(frequencyFeatures, {
     keys: [
       { name: 'label', weight: 0.28 },
@@ -78,7 +78,7 @@ export function buildFeatureSearchIndex(): void {
   })
 }
 
-export function buildEducationalSearchIndex(): void {
+function buildEducationalSearchIndex(): void {
   educationalFuseIndex = new Fuse(EDUCATIONAL_EXAMPLES, {
     keys: [
       { name: 'label', weight: 0.38 },
@@ -94,7 +94,7 @@ export function buildEducationalSearchIndex(): void {
 /** ITU sub-bands and technology allocations shown in professional mode. Without these
  *  the whole professional dataset was unsearchable — "ELF", "WiGig" or "5G" returned
  *  nothing from the very layers professional mode draws. */
-export function buildProfessionalSearchIndex(): void {
+function buildProfessionalSearchIndex(): void {
   proBandFuseIndex = new Fuse(PROFESSIONAL_SUB_BANDS, {
     keys: [
       { name: 'label', weight: 0.4 },
@@ -218,12 +218,6 @@ export function search(query: string, bands: SpectrumBand[], options: SearchOpti
     : merged
 
   return visibleResults.slice(0, 14)
-}
-
-export function searchBands(query: string, bands: SpectrumBand[]): SpectrumBand[] {
-  return search(query, bands)
-    .filter(r => r.type === 'band')
-    .map(r => r.data as SpectrumBand)
 }
 
 function _parseFrequencyQueryCandidates(q: string): FrequencyQueryCandidate[] {

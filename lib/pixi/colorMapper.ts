@@ -12,7 +12,7 @@ export const BAND_COLORS: Record<SpectrumCategory, number> = {
   sound:       0xFFD60A,   // yellow (overlay)
 }
 
-export function wavelengthToRGB(wavelength_nm: number): { r: number; g: number; b: number } {
+function wavelengthToRGB(wavelength_nm: number): { r: number; g: number; b: number } {
   let r = 0, g = 0, b = 0
   const w = wavelength_nm
 
@@ -47,17 +47,4 @@ export function getVisibleSpectrumGradient(): string {
     stops.push(`rgb(${r},${g},${b}) ${pct}%`)
   }
   return `linear-gradient(to right, ${stops.join(', ')})`
-}
-
-// Helper: pick correct color for a band (visible uses wavelength → PixiJS color)
-export function getBandColor(
-  category: SpectrumCategory,
-  wavelength_min?: number,
-  wavelength_max?: number
-): number {
-  if (category === 'visible' && wavelength_min !== undefined && wavelength_max !== undefined) {
-    const centerNm = ((wavelength_min + wavelength_max) / 2) * 1e9
-    return wavelengthToPixiColor(centerNm)
-  }
-  return BAND_COLORS[category] ?? 0xffffff
 }

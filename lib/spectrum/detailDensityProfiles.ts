@@ -71,19 +71,3 @@ export function getProfessionalVisibilityThresholdForDensity(density: SpectrumDe
   if (density === 'max') return 0.2
   return 0.42
 }
-
-export function getDensitySummary(density: SpectrumDetailDensity, mode: SpectrumMode): string {
-  if (density === 'clean') {
-    return mode === 'professional'
-      ? 'Minimal: core anchors and key technical references.'
-      : 'Minimal: core anchors and essentials only.'
-  }
-  if (density === 'details') {
-    return mode === 'professional'
-      ? 'Balanced: richer context with controlled technical clutter.'
-      : 'Balanced: more context with readable density.'
-  }
-  return mode === 'professional'
-    ? 'Max: full technical overlays and dense relationships.'
-    : 'Max: all visible points and relationships.'
-}

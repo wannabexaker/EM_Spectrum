@@ -1563,18 +1563,6 @@ html, body {
   border-color: var(--neon-cyan);
 }
 
-/* ─── Band label overlays (CSS only) ────────────────────────── */
-.band-label-overlay {
-  position: absolute;
-  top: 94px;
-  font-family: var(--font-display);
-  font-size: 10px;
-  color: var(--text-primary);
-  pointer-events: none;
-  white-space: nowrap;
-  text-shadow: 0 0 8px rgba(0,0,0,0.8);
-}
-
 /* ─── Responsive ────────────────────────────────────────────── */
 
 /* Tablet / narrow desktop */

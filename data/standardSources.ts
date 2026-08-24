@@ -14,7 +14,7 @@ export interface StandardSource {
   note?: string
 }
 
-export const ITU_RADIO_REGULATIONS: StandardSource = {
+const ITU_RADIO_REGULATIONS: StandardSource = {
   label: 'ITU Radio Regulations',
   url: 'https://www.itu.int/pub/R-REG-RR',
   note: 'Treaty-level frequency allocations by region and service',
