@@ -1,3 +1,4 @@
+import { isAtlasItemVisible } from '@/lib/spectrum/atlasVisibility'
 import type {
   SpectrumCategory,
   ScientificConfidence,
@@ -2012,9 +2013,7 @@ export function isEduExampleVisible(
   hiddenDomains: readonly UniversalVibrationCategory[],
   verifiedOnly: boolean,
 ): boolean {
-  if (verifiedOnly && ex.confidence !== 'Scientifically Verified') return false
-  if (ex.atlasCategory && hiddenDomains.includes(ex.atlasCategory)) return false
-  return true
+  return isAtlasItemVisible(ex, hiddenDomains, verifiedOnly)
 }
 
 /** Domains present in the dataset with counts, most-populated first — drives the filter UI. */

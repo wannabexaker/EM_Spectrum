@@ -1,39 +1,10 @@
 import { EDUCATIONAL_EXAMPLES } from '@/data/educationalExamples'
 import { frequencyFeatures } from '@/data/frequencyFeatures'
 import type { ScientificConfidence, UniversalVibrationCategory } from '@/types/spectrum'
+import type { AtlasFilterable } from '@/lib/spectrum/atlasVisibility'
 
-/**
- * Anything the Atlas filter governs. Educational stories and Universal Vibrations
- * Atlas features share the same taxonomy, so they share the same predicate.
- */
-export interface AtlasFilterable {
-  atlasCategory?: UniversalVibrationCategory
-  confidence?: ScientificConfidence
-}
-
-export function isAtlasItemVisible(
-  item: AtlasFilterable,
-  hiddenDomains: readonly UniversalVibrationCategory[],
-  verifiedOnly: boolean,
-): boolean {
-  if (verifiedOnly && item.confidence !== 'Scientifically Verified') return false
-  if (item.atlasCategory && hiddenDomains.includes(item.atlasCategory)) return false
-  return true
-}
-
-/**
- * A feature only answers to the Atlas filter if it carries an atlasCategory.
- * Technology allocations and RF bands are outside that taxonomy and must stay
- * visible regardless of which domains are hidden.
- */
-export function isFeatureAtlasVisible(
-  feature: AtlasFilterable,
-  hiddenDomains: readonly UniversalVibrationCategory[],
-  verifiedOnly: boolean,
-): boolean {
-  if (!feature.atlasCategory) return true
-  return isAtlasItemVisible(feature, hiddenDomains, verifiedOnly)
-}
+export { isAtlasItemVisible, isFeatureAtlasVisible } from '@/lib/spectrum/atlasVisibility'
+export type { AtlasFilterable } from '@/lib/spectrum/atlasVisibility'
 
 /** Everything the filter can act on, across both pools. */
 const ATLAS_ITEMS: AtlasFilterable[] = [
