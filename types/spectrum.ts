@@ -118,6 +118,15 @@ export interface FrequencyFeature {
     url?: string
     note?: string
   }>
+  /**
+   * The authored extent of the phenomenon, when it has one. Kept explicitly because
+   * frequency_center is a geometric centre (correct for placing a pin on a log axis)
+   * while a linear center +/- bandwidth/2 is not its inverse: for 25-150 Hz that
+   * arithmetic yields a NEGATIVE lower bound, which the card then clamped to F_MIN
+   * and displayed as "0.0100 pHz". Consumers should prefer these over deriving.
+   */
+  rangeMin?: number
+  rangeMax?: number
   periodSeconds?: number
   modulationTypes?: string[]
   modeVisibility?: SpectrumMode | 'both'

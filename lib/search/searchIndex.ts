@@ -10,6 +10,7 @@ import {
 } from '@/data/professionalSpectrum'
 import type { FrequencyFeature, SpectrumBand } from '@/types/spectrum'
 import { F_MIN, LOG_RANGE, formatFrequency, formatWavelength, freqToWavelength } from '@/lib/zoom/logMapper'
+import { featureRange } from '@/lib/spectrum/featureRange'
 
 export interface SearchResult {
   type: 'band' | 'technology' | 'atlas' | 'educational' | 'pro-band' | 'pro-tech'
@@ -380,9 +381,10 @@ function _frequencyQueryResults(query: string, candidates: FrequencyQueryCandida
 function _findFeatureMatches(freq: number): Array<{ feature: FrequencyFeature; score: number }> {
   return frequencyFeatures
     .map(feature => {
-      const half = Math.max(feature.frequency_bandwidth / 2, feature.frequency_center * 1e-9, F_MIN)
-      const min = Math.max(F_MIN, feature.frequency_center - half)
-      const max = Math.max(min, feature.frequency_center + half)
+      const { min, max } = featureRange(feature)
+      // Normaliser for the closeness score: half the real band, floored so a
+      // zero-width feature cannot divide by zero.
+      const half = Math.max((max - min) / 2, feature.frequency_center * 1e-9, F_MIN)
 
       if (freq < min || freq > max) return null
 
@@ -435,9 +437,8 @@ function _freeFrequencyResult(freq: number, label: string): SearchResult {
 }
 
 function _featureResult(feature: FrequencyFeature): SearchResult {
-  const half = feature.frequency_bandwidth / 2
-  const min = Math.max(F_MIN, feature.frequency_center - half)
-  const max = Math.max(min * 1.0001, feature.frequency_center + half)
+  const { min, max: rawMax } = featureRange(feature)
+  const max = Math.max(min * 1.0001, rawMax)
   const logSpan = Math.max(Math.log10(max) - Math.log10(min), 0.002)
   const group = feature.atlasCategory ? ATLAS_CATEGORY_LABELS[feature.atlasCategory] : feature.family
 

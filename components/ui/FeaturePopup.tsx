@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import { ATLAS_CATEGORY_LABELS } from '@/data/universalVibrationsAtlas'
-import { F_MIN, formatFrequency } from '@/lib/zoom/logMapper'
+import { formatFrequency } from '@/lib/zoom/logMapper'
+import { featureRange } from '@/lib/spectrum/featureRange'
 import { findRelatedFeatures, formatRelationshipReason } from '@/lib/spectrum/featureRelationships'
 import { useSpectrumStore } from '@/store/spectrumStore'
 import { CopyCardLink } from '@/components/ui/CopyCardLink'
@@ -70,8 +71,7 @@ export function FeaturePopup({ feature, x, y, canvasW, canvasH, onClose, onNavig
   const left = Math.max(8, Math.min(x + 12, canvasW - popupW - 8))
   const top = y + 24 + POPUP_H > canvasH ? Math.max(8, y - POPUP_H - 12) : y + 24
 
-  const fMin = Math.max(F_MIN, feature.frequency_center - feature.frequency_bandwidth / 2)
-  const fMax = feature.frequency_center + feature.frequency_bandwidth / 2
+  const { min: fMin, max: fMax } = featureRange(feature)
   const periodSeconds = feature.periodSeconds ?? (feature.frequency_center > 0 ? 1 / feature.frequency_center : undefined)
   const atlasLabel = feature.atlasCategory ? ATLAS_CATEGORY_LABELS[feature.atlasCategory] : null
   const related = findRelatedFeatures(feature, 6)
