@@ -127,3 +127,6 @@ Read `graphify-out/GRAPH_REPORT.md` before answering architecture questions.
 ## PRD Goals (22 Phases)
 
 The project was built phase-by-phase. Implemented phases include: log-scale PixiJS canvas, LOD system, band pool, zoom/pan with keyboard nav, visible spectrum gradient (Phase 15), sound overlay track, ionizing radiation hazard indicator, side panel with tabs, fuzzy search, URL deep links, `prefers-reduced-motion` support, animated navigation (`animateTo`), service worker / offline support, static band pages for SEO.
+
+## Local-only files (`.scratch/`)
+`.scratch/` holds this project's local-only working files (plans, logs, backups, rescued files, local config). It is git-ignored; `.scratch/README.md` is the index. Never copy its contents into tracked files.
