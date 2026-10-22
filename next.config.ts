@@ -4,6 +4,12 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 
 const nextConfig: NextConfig = {
   output: 'export',
+  // Pin the Turbopack filesystem root to this file's directory. Root inference walks
+  // up looking for a lockfile, so a build spawned from a parent repo (the portfolio
+  // runs `npm run build` in here) could otherwise resolve a root above this project.
+  // Defense in depth only: the "Could not find the Next.js package" failure that
+  // prompted this was a partial node_modules install, not a root problem.
+  turbopack: { root: import.meta.dirname },
   trailingSlash: true,
   images: { unoptimized: true },
   basePath,
