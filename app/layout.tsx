@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar'
+import { siteUrl } from '@/lib/siteUrl'
 
 // Self-hosted at build time (offline-safe, no external request, no layout shift).
 // Exposed as CSS variables consumed by globals.css and the canvas font helper.
@@ -26,14 +27,6 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
 }
-
-// Canonical and social URLs are built from this. It pointed at a vercel.app host the app
-// is not deployed on, so every absolute URL in the metadata resolved to somewhere that
-// does not serve this site. Falls back to the GitHub Pages deployment, including the base
-// path the portfolio build mounts it under.
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  `https://wannabexaker.github.io${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}`
 
 // Fully qualified on purpose. Next resolves a root-relative metadata image against
 // metadataBase's *origin* only, dropping its path — under the portfolio's

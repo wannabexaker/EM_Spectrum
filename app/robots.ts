@@ -1,6 +1,7 @@
 export const dynamic = 'force-static'
 
 import type { MetadataRoute } from 'next'
+import { siteUrl } from '@/lib/siteUrl'
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -8,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
     },
-    sitemap: 'https://em-spectrum.vercel.app/sitemap.xml',
+    sitemap: `${siteUrl}/sitemap.xml`,
   }
 }
