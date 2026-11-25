@@ -1,15 +1,17 @@
 ﻿# em-spectrum
 
-Interactive visualization of the electromagnetic spectrum spanning 26 decades of frequency with infinite zoom, real-world technology overlay, and educational/professional content modes.
+Interactive visualization of the electromagnetic spectrum spanning 40 decades of frequency with up to 5000× zoom, real-world technology overlay, and educational/professional content modes.
+
+**Live:** https://wannabexaker.github.io/em-spectrum/
 
 ## Overview
 
-This project renders the full EM spectrum (1 Hz to 10²⁶ Hz) as a navigable, zoomable canvas using logarithmic frequency mapping to distribute the full range across screen space. Users pan and zoom to explore frequency allocations, see wavelength equivalents, discover what technologies occupy each band (WiFi, GPS, 5G, medical imaging, etc.), and learn about physical interactions and hazards. A dual-mode system switches between accessible scientific explanations and technical detail. All data is static, rendered client-side via WebGL, and cached for offline access.
+This project renders the full EM spectrum (10⁻¹⁴ Hz to 10²⁶ Hz) as a navigable, zoomable canvas using logarithmic frequency mapping to distribute the full range across screen space. Users pan and zoom to explore frequency allocations, see wavelength equivalents, discover what technologies occupy each band (WiFi, GPS, 5G, medical imaging, etc.), and learn about physical interactions and hazards. A dual-mode system switches between accessible scientific explanations and technical detail. All data is static, rendered client-side via WebGL, and cached for offline access.
 
 ## Features
 
-- Logarithmic pan and zoom across 26 frequency decades (1–50× magnification)
-- 40+ electromagnetic bands with full metadata (applications, hazards, physical properties)
+- Logarithmic pan and zoom across 40 frequency decades (0.5× to 5000× magnification)
+- 32 electromagnetic bands with full metadata (applications, hazards, physical properties)
 - 30+ real-world technologies mapped to spectrum regions (WiFi, GPS, 5G, fiber optics, X-ray, etc.)
 - Educational/Professional content modes (toggleable verbosity in side panel)
 - Frequency and wavelength unit switching (Hz, kHz, MHz, GHz, THz, etc. and nm, μm, mm)
@@ -20,7 +22,7 @@ This project renders the full EM spectrum (1 Hz to 10²⁶ Hz) as a navigable, z
 - Level-of-detail (LOD) system: bands hidden/shown dynamically based on zoom to maintain 60 fps
 - Service Worker caching for offline browsing
 - Mobile responsive (375px and up)
-- Accessible components (Radix UI) with keyboard navigation
+- Keyboard navigation of markers and cards, plus a screen-reader list of what is on the canvas
 
 ## Architecture
 
@@ -55,18 +57,16 @@ Data flows from spectrum.json through a filtered band list (getBandsInViewport) 
 | Framer Motion 12 | Side panel slide animations |
 | Tailwind CSS 4 | Utility-first styling |
 | Fuse.js 7 | Client-side fuzzy search (band names) |
-| Radix UI | Accessible components (Dialog, Slider, ToggleGroup, Tooltip) |
-| next-themes 0.4 | Dark mode support |
 
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/em-spectrum.git
-cd em-spectrum
+git clone https://github.com/wannabexaker/EM_Spectrum.git
+cd EM_Spectrum
 npm install
 ```
 
-Requires Node.js 18+. All dependencies declared in package.json; no build configuration needed.
+Requires Node.js 20.9+ (the minimum for Next.js 16). All dependencies declared in package.json; no build configuration needed.
 
 ## Usage
 
@@ -105,7 +105,7 @@ em-spectrum/
 │   ├── page.tsx              — landing page (sci-fi hero, feature cards)
 │   ├── spectrum/page.tsx     — main spectrum visualizer
 │   ├── [band]/page.tsx       — SSG band detail pages (/[band]/)
-│   ├── layout.tsx            — root layout, theme provider, service worker registration
+│   ├── layout.tsx            — root layout, metadata, service worker registration
 │   ├── globals.css           — CSS variables, Tailwind base styles
 │   ├── robots.ts             — SEO robots.txt
 │   └── sitemap.ts            — SEO sitemap.xml
@@ -114,7 +114,6 @@ em-spectrum/
 │   │   ├── SpectrumRenderer.ts    — PixiJS engine (WebGL, object pool, LOD)
 │   │   ├── SpectrumCanvas.tsx     — React wrapper, lifecycle
 │   │   ├── SidePanel.tsx          — band detail panel (Framer Motion)
-│   │   ├── BandLabel.tsx          — band label rendering
 │   │   └── SpectrumErrorBoundary.tsx
 │   ├── ui/
 │   │   ├── SearchBar.tsx          — Fuse.js search + custom parser
@@ -133,17 +132,16 @@ em-spectrum/
 ├── lib/
 │   ├── zoom/
 │   │   ├── logMapper.ts      — frequency ↔ pixel coordinate mapping (log₁₀)
-│   │   ├── lodController.ts  — LOD level calculation by zoom
-│   │   └── viewportManager.ts — clamp, pan, zoom math
+│   │   └── lodController.ts  — LOD level calculation by zoom
 │   ├── pixi/
 │   │   └── colorMapper.ts    — band color selection, visible-spectrum gradient
 │   ├── search/
-│   │   └── frequencyParser.ts — "2.4 GHz", "550 nm" parsing
+│   │   └── searchIndex.ts    — Fuse.js indexes, frequency/wavelength/period query parsing
 │   └── deeplink/
 │       └── urlState.ts       — URL encoding/decoding (frequency + zoom)
 ├── data/
-│   ├── spectrum.json         — 40+ EM bands (frequencies, wavelengths, metadata)
-│   ├── technologies.json     — 30+ real-world technology definitions
+│   ├── spectrum.json         — 32 EM bands (frequencies, wavelengths, metadata)
+│   ├── professionalSpectrum.ts — ITU sub-bands and 57 technology allocations
 │   └── frequencyFeatures.ts  — searchable band index
 ├── store/
 │   └── spectrumStore.ts      — Zustand store (centerFrequency, zoomLevel, selectedBand, visibilityLayers)
@@ -154,26 +152,17 @@ em-spectrum/
 │   ├── og/                   — OG image assets for social sharing
 │   └── icons/                — favicon, app icons
 ├── docs/
-│   ├── architecture.md       — component tree, data flow, tech rationale
-│   ├── rendering.md          — PixiJS rendering details, LOD system
-│   ├── zoom-engine.md        — logarithmic mapping mathematics
-│   ├── data-model.md         — spectrum.json schema and invariants
-│   ├── features.md           — implemented features and roadmap
-│   ├── ui-ux.md              — design system, interaction patterns
-│   ├── performance.md        — optimization notes, benchmarks
-│   ├── deployment.md         — Vercel deployment, static export
-│   └── roadmap.md            — Phase 2–4 planned features
+│   └── universal-vibrations-atlas.md — design of the cross-domain vibrations atlas
 ├── package.json
 ├── tsconfig.json
 ├── next.config.ts
 ├── postcss.config.mjs
-├── tailwind.config.ts
 └── README.md
 ```
 
 ## Notes
 
-**Logarithmic frequency mapping is essential for visualization.** Linear screen-to-frequency would compress the low-frequency bands (ELF 3–30 Hz, SLF 30–300 Hz) to invisibly narrow slices. Log₁₀ distribution spreads all 26 decades evenly, making each decade occupy equal screen space.
+**Logarithmic frequency mapping is essential for visualization.** Linear screen-to-frequency would compress the low-frequency bands (ELF 3–30 Hz, SLF 30–300 Hz) to invisibly narrow slices. Log₁₀ distribution spreads all 40 decades evenly, making each decade occupy equal screen space.
 
 **Object pooling in SpectrumRenderer prevents garbage collection pauses.** Pre-allocating 300 Graphics and Text objects and reusing them during LOD transitions keeps 60 fps smooth during rapid zoom interactions. GC pauses above 1 frame are perceptible and ruin the experience.
 
@@ -185,7 +174,7 @@ em-spectrum/
 
 **Dual-mode content (Educational/Professional) lives in metadata, not separate routes.** The same SpectrumBand object contains both a plain-language description and detailed technical explanation. The side panel toggles between them via a Zustand flag. No code duplication, single source of truth.
 
-**Search recognizes frequency and wavelength expressions without regex compilation.** A custom parser in requencyParser.ts recognizes patterns like "2.4 GHz", "1e9 Hz", "550 nm" without triggering the regex engine on every keystroke. This keeps search responsive in Fuse.js.
+**Search recognizes frequency, wavelength and period expressions before it falls back to fuzzy matching.** The parser in lib/search/searchIndex.ts turns queries like "2.4 GHz", "1e9 Hz", "550 nm" or "90 bpm" into a frequency and lists what sits there; only queries it cannot read go to Fuse.js.
 
 ## Future Improvements
 
